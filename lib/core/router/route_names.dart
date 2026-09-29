@@ -28,6 +28,7 @@ class Routes {
   // Shared (Part D)
   static const settings = '/settings';
   static const editProfile = '/settings/edit';
+  static const notifications = '/notifications';
 
   // Admin (Phase 5)
   static const pendingWorkers = '/admin/pending';

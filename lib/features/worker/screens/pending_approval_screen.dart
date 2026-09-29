@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_bar_logo.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../notifications/widgets/notifications_button.dart';
 import '../../profile/widgets/settings_button.dart';
 import '../data/worker_repository.dart';
 import '../providers/worker_providers.dart';
@@ -52,7 +53,7 @@ class _PendingApprovalScreenState extends ConsumerState<PendingApprovalScreen> {
     final worker = ref.watch(myWorkerProfileProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const AppBarLogo(), actions: const [SettingsButton()]),
+      appBar: AppBar(title: const AppBarLogo(), actions: const [NotificationsButton(), SettingsButton()]),
       body: SafeArea(
         child: AsyncView(
           value: worker,

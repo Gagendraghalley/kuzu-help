@@ -18,6 +18,7 @@ import '../../features/customer/screens/report_worker_screen.dart';
 import '../../features/customer/screens/worker_details_screen.dart';
 import '../../features/customer/screens/worker_list_screen.dart';
 import '../../features/customer/screens/write_review_screen.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
 import '../../features/worker/screens/pending_approval_screen.dart';
@@ -67,6 +68,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       GoRoute(path: Routes.settings, builder: (_, __) => const SettingsScreen()),
       GoRoute(path: Routes.editProfile, builder: (_, __) => const EditProfileScreen()),
+      GoRoute(path: Routes.notifications, builder: (_, __) => const NotificationsScreen()),
 
       GoRoute(path: Routes.pendingWorkers, builder: (_, __) => const PendingWorkersScreen()),
       GoRoute(path: Routes.users, builder: (_, __) => const UsersScreen()),

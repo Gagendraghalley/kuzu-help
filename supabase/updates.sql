@@ -9,6 +9,7 @@
 --   2. Admins deactivate (blacklist) users.
 --   3. Workers can switch to customer; sign-up and log-in check emails.
 --   4. What customers see in worker_directory, with all of the above.
+--   5. Notifications: each user's own list, under the bell.
 -- The last line makes the app see the changes straight away.
 -- =====================================================================
 
@@ -226,6 +227,316 @@ left join public.reviews r
   and exists (select 1 from public.profiles c where c.id = r.customer_id and c.is_active)
 where w.verification_status = 'approved' and p.is_active and p.role = 'worker'
 group by w.id, p.id;
+
+
+-- ---------------------------------------------------------------------
+-- 5. Notifications
+-- ---------------------------------------------------------------------
+-- Each user's own list of what has happened that concerns them, under the
+-- bell on their home screen. Only this section's functions add to it, never
+-- the app, so a notification always means it really happened:
+--   admins:    someone registered; a worker sent their documents or asks to
+--              be checked again; a customer reported a worker
+--   workers:   approved or rejected; a customer reviewed them, or tapped
+--              Call or WhatsApp on their page
+--   customers: the team has dealt with their report
+--   everyone:  welcome; account deactivated or reactivated
+-- The app words each one from [type] and [data] (app_strings.dart), so it
+-- can be translated. Workers aren't told which customer reviewed or
+-- contacted them, as the app doesn't show reviewers' names.
+create table if not exists public.notifications (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  type        text not null,
+  data        jsonb not null default '{}',
+  actor_id    uuid references public.profiles (id) on delete set null, -- who caused it, when a user did
+  read_at     timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+
+alter table public.notifications enable row level security;
+revoke all on public.notifications from anon, authenticated;
+
+-- Users read their own and mark them read; nothing else.
+grant select on public.notifications to authenticated;
+grant update (read_at) on public.notifications to authenticated;
+
+drop policy if exists "notifications: read own" on public.notifications;
+create policy "notifications: read own"
+  on public.notifications for select to authenticated
+  using (user_id = (select auth.uid()));
+
+drop policy if exists "notifications: mark own read" on public.notifications;
+create policy "notifications: mark own read"
+  on public.notifications for update to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+-- New ones reach the bell straight away (Supabase Realtime).
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notifications'
+     ) then
+    alter publication supabase_realtime add table public.notifications;
+  end if;
+end;
+$$;
+
+-- Adding notifications. The app can't call these; the triggers below do.
+create or replace function public.add_notification(recipient uuid, kind text, details jsonb default '{}', actor uuid default null)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  insert into public.notifications (user_id, type, data, actor_id)
+  values (recipient, kind, coalesce(details, '{}'), actor);
+$$;
+
+-- Every admin except [actor], so an admin isn't told about what they did.
+create or replace function public.add_admin_notification(kind text, details jsonb default '{}', actor uuid default null)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  insert into public.notifications (user_id, type, data, actor_id)
+  select id, kind, coalesce(details, '{}'), actor
+  from public.profiles
+  where role = 'admin' and id is distinct from actor;
+$$;
+
+revoke execute on function public.add_notification(uuid, text, jsonb, uuid),
+  public.add_admin_notification(text, jsonb, uuid)
+  from public, anon, authenticated;
+
+-- 5a. Someone registered: they entered the code from their email (A4). Their
+-- profiles row is made earlier, when the code is sent, so people who never
+-- enter it aren't announced. The insert trigger is for projects that don't
+-- ask for the code; its name sorts after on_auth_user_created (schema.sql),
+-- so the profiles row is there first.
+create or replace function public.handle_user_registered()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  p public.profiles;
+begin
+  select * into p from public.profiles where id = new.id;
+  if not found then
+    return new;
+  end if;
+  perform public.add_notification(p.id, 'welcome', jsonb_build_object('role', p.role));
+  perform public.add_admin_notification('new_user',
+    jsonb_build_object('user_id', p.id, 'name', p.full_name, 'email', p.email, 'role', p.role), p.id);
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_confirmed on auth.users;
+create trigger on_auth_user_created_confirmed
+  after insert on auth.users
+  for each row when (new.email_confirmed_at is not null)
+  execute function public.handle_user_registered();
+
+drop trigger if exists on_auth_user_confirmed on auth.users;
+create trigger on_auth_user_confirmed
+  after update of email_confirmed_at on auth.users
+  for each row when (old.email_confirmed_at is null and new.email_confirmed_at is not null)
+  execute function public.handle_user_registered();
+
+-- 5b. A worker sent their documents for checking for the first time (B3).
+create or replace function public.handle_worker_documents_sent()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.add_admin_notification('worker_submitted',
+    jsonb_build_object(
+      'worker_id', new.worker_id,
+      'name', (select full_name from public.profiles where id = new.worker_id)),
+    new.worker_id);
+  return new;
+end;
+$$;
+
+drop trigger if exists worker_verifications_notify on public.worker_verifications;
+create trigger worker_verifications_notify
+  after insert on public.worker_verifications
+  for each row execute function public.handle_worker_documents_sent();
+
+-- 5c. An admin approved or rejected a worker (section 1): the worker. A
+-- rejected worker asked to be checked again (B4): the admins.
+create or replace function public.handle_verification_changed()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.verification_status = 'approved' then
+    perform public.add_notification(new.id, 'worker_approved', '{}', (select auth.uid()));
+  elsif new.verification_status = 'rejected' then
+    perform public.add_notification(new.id, 'worker_rejected',
+      jsonb_build_object('note', new.admin_notes), (select auth.uid()));
+  elsif old.verification_status = 'rejected' and new.id = (select auth.uid()) then
+    perform public.add_admin_notification('worker_resubmitted',
+      jsonb_build_object('worker_id', new.id, 'name', (select full_name from public.profiles where id = new.id)),
+      new.id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists worker_profiles_verification_notify on public.worker_profiles;
+create trigger worker_profiles_verification_notify
+  after update of verification_status on public.worker_profiles
+  for each row when (old.verification_status is distinct from new.verification_status)
+  execute function public.handle_verification_changed();
+
+-- 5d. A customer reviewed a worker, or changed their review (C4): the worker.
+-- Saving the same review again changes nothing, so tells no one.
+create or replace function public.handle_review_saved()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.add_notification(new.worker_id,
+    case when tg_op = 'INSERT' then 'review_new' else 'review_updated' end,
+    jsonb_build_object('worker_id', new.worker_id, 'rating', new.rating),
+    new.customer_id);
+  return new;
+end;
+$$;
+
+drop trigger if exists reviews_notify_new on public.reviews;
+create trigger reviews_notify_new
+  after insert on public.reviews
+  for each row execute function public.handle_review_saved();
+
+drop trigger if exists reviews_notify_changed on public.reviews;
+create trigger reviews_notify_changed
+  after update of rating, comment on public.reviews
+  for each row when (old.rating is distinct from new.rating or old.comment is distinct from new.comment)
+  execute function public.handle_review_saved();
+
+-- 5e. A customer reported a worker (C5): the admins. The worker isn't told.
+-- An admin changed the report's status (in the Supabase dashboard): the
+-- customer who sent it.
+create or replace function public.handle_report_sent()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.add_admin_notification('report_new',
+    jsonb_build_object(
+      'report_id', new.id,
+      'worker_id', new.worker_id,
+      'worker_name', (select full_name from public.profiles where id = new.worker_id),
+      'reason', new.reason),
+    new.reporter_id);
+  return new;
+end;
+$$;
+
+drop trigger if exists reports_notify_new on public.reports;
+create trigger reports_notify_new
+  after insert on public.reports
+  for each row execute function public.handle_report_sent();
+
+create or replace function public.handle_report_status_changed()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.add_notification(new.reporter_id, 'report_updated',
+    jsonb_build_object(
+      'report_id', new.id,
+      'worker_name', (select full_name from public.profiles where id = new.worker_id),
+      'status', new.status),
+    (select auth.uid()));
+  return new;
+end;
+$$;
+
+drop trigger if exists reports_notify_status on public.reports;
+create trigger reports_notify_status
+  after update of status on public.reports
+  for each row when (old.status is distinct from new.status)
+  execute function public.handle_report_status_changed();
+
+-- 5f. An admin deactivated or reactivated a user (section 2): that user.
+create or replace function public.handle_account_status_changed()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.add_notification(new.id,
+    case when new.is_active then 'account_reactivated' else 'account_deactivated' end,
+    jsonb_build_object('reason', new.deactivated_reason),
+    (select auth.uid()));
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_active_notify on public.profiles;
+create trigger profiles_active_notify
+  after update of is_active on public.profiles
+  for each row when (old.is_active is distinct from new.is_active)
+  execute function public.handle_account_status_changed();
+
+-- 5g. C3: a customer tapped Call or WhatsApp on a worker's page, so the
+-- worker knows someone is getting in touch. At most once a day for each
+-- customer and worker; only for workers customers can see; never for
+-- yourself. [method] is 'call' or 'whatsapp'.
+create or replace function public.record_contact(worker_id uuid, method text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me uuid := (select auth.uid());
+begin
+  if method not in ('call', 'whatsapp') then
+    raise exception 'Unknown contact method: %', method using errcode = '22023';
+  end if;
+  if me is null or me = record_contact.worker_id or not public.is_active_profile(me) then
+    return;
+  end if;
+  if not exists (select 1 from public.worker_directory d where d.id = record_contact.worker_id) then
+    return;
+  end if;
+  if exists (
+    select 1 from public.notifications n
+    where n.user_id = record_contact.worker_id and n.actor_id = me and n.type = 'contact'
+      and n.created_at > now() - interval '1 day'
+  ) then
+    return;
+  end if;
+  perform public.add_notification(record_contact.worker_id, 'contact',
+    jsonb_build_object('method', method), me);
+end;
+$$;
+
+revoke execute on function public.record_contact(uuid, text) from public, anon;
+grant execute on function public.record_contact(uuid, text) to authenticated;
 
 
 -- Make the app's API see the new functions now, not in a few minutes.

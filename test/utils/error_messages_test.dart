@@ -31,6 +31,13 @@ void main() {
     expect(ErrorMessages.from(byStatus), AppStrings.tooManyAttempts);
   });
 
+  test('a database function or table from updates.sql is missing', () {
+    const function = PostgrestException(message: 'Could not find the function', code: 'PGRST202');
+    const table = PostgrestException(message: "Could not find the table 'public.notifications'", code: 'PGRST205');
+    expect(ErrorMessages.from(function), AppStrings.databaseUpdateNeeded);
+    expect(ErrorMessages.from(table), AppStrings.databaseUpdateNeeded);
+  });
+
   test('anything else gets the general message', () {
     expect(ErrorMessages.from(Exception('Failed host lookup')), AppStrings.genericError);
     expect(ErrorMessages.from(const AuthException('Something odd')), AppStrings.genericError);

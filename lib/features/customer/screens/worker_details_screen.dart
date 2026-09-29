@@ -58,7 +58,7 @@ class WorkerDetailsScreen extends ConsumerWidget {
               child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: ContactButtons(phone: phone),
+                  child: ContactButtons(workerId: workerId, phone: phone),
                 ),
               ),
             ),

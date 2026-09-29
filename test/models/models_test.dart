@@ -1,4 +1,5 @@
 import 'package:bhutan_services/core/constants/app_constants.dart';
+import 'package:bhutan_services/shared/models/app_notification.dart';
 import 'package:bhutan_services/shared/models/profile.dart';
 import 'package:bhutan_services/shared/models/review.dart';
 import 'package:bhutan_services/shared/models/worker_listing.dart';
@@ -42,6 +43,32 @@ void main() {
     expect(service.categoryName, 'Plumber');
     expect(service.categoryIcon, 'plumber');
     expect(service.priceNote, 'Nu 500 per visit');
+  });
+
+  test('AppNotification.fromJson reads a notifications row', () {
+    final unread = AppNotification.fromJson({
+      'id': 'n1',
+      'user_id': 'w1',
+      'type': 'review_new',
+      'data': {'worker_id': 'w1', 'rating': 5},
+      'actor_id': 'c1',
+      'read_at': null,
+      'created_at': '2026-09-01T10:00:00+00:00',
+    });
+    expect(unread.isRead, isFalse);
+    expect(unread.workerId, 'w1');
+    expect(unread.data['rating'], 5);
+    expect(unread.createdAt, DateTime.utc(2026, 9, 1, 10));
+
+    final read = AppNotification.fromJson({
+      'id': 'n2',
+      'type': 'welcome',
+      'data': null,
+      'read_at': '2026-09-02T08:00:00+00:00',
+      'created_at': '2026-09-01T10:00:00+00:00',
+    });
+    expect(read.isRead, isTrue);
+    expect(read.data, isEmpty);
   });
 
   test('Review.fromJson reads a reviews row', () {

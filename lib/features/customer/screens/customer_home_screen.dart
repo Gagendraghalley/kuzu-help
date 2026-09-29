@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_bar_logo.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/info_note.dart';
+import '../../notifications/widgets/notifications_button.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../../profile/widgets/settings_button.dart';
 import '../providers/search_providers.dart';
@@ -29,7 +30,7 @@ class CustomerHomeScreen extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const AppBarLogo(), actions: const [SettingsButton()]),
+      appBar: AppBar(title: const AppBarLogo(), actions: const [NotificationsButton(), SettingsButton()]),
       body: SafeArea(
         child: AsyncView(
           value: categories,

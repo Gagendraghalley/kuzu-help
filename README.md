@@ -44,6 +44,19 @@ Flutter + Supabase marketplace connecting customers with verified local workers.
    - **Switching roles and checking emails**: workers can stop offering services (become
      customers); sign-up says when an email is already registered and log-in says when
      it isn't. Admins can't switch to customer or worker.
+   - **Notifications**: a bell on every home screen with each user's own list, updated
+     live (it adds the `notifications` table to Supabase Realtime). The database adds
+     them itself, so they can't be faked from the app:
+     - admins: someone registered (after entering their email code), a worker sent their
+       documents or asks to be checked again, a customer reported a worker;
+     - workers: approved or rejected (with the admin's note), a customer reviewed them,
+       or tapped Call or WhatsApp on their page (at most once a day per customer);
+     - customers: an admin changed the status of their report (in the dashboard);
+     - everyone: welcome, and account deactivated or reactivated.
+
+     Workers aren't told which customer reviewed or contacted them, as reviews don't
+     show names. Tapping a notification opens what it's about (the worker's page, Users,
+     or the worker's dashboard).
 
    Users can't delete their own account in the app; admins deactivate accounts instead.
 
@@ -79,6 +92,7 @@ Flutter + Supabase marketplace connecting customers with verified local workers.
 | `lib/features/customer` | C1–C5: home, worker list, details, review, report |
 | `lib/features/profile` | D1: settings, edit profile, change password, logout |
 | `lib/features/admin` | Workers awaiting approval, Users, and the 'Admin check' card (approve, reject, deactivate) |
+| `lib/features/notifications` | The bell (unread count) and the Notifications screen |
 | `lib/shared` | Models and reusable widgets |
 | `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the delete-account Edge Function (no longer called by the app) |
 

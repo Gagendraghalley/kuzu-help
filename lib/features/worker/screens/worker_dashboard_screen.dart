@@ -18,6 +18,7 @@ import '../../../shared/widgets/worker_stats.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../customer/data/directory_repository.dart';
 import '../../customer/providers/worker_details_providers.dart';
+import '../../notifications/widgets/notifications_button.dart';
 import '../../profile/widgets/settings_button.dart';
 import '../data/worker_repository.dart';
 import '../widgets/availability_switch.dart';
@@ -37,7 +38,7 @@ class WorkerDashboardScreen extends ConsumerWidget {
     final details = ref.watch(workerDetailsProvider(myId));
 
     return Scaffold(
-      appBar: AppBar(title: const AppBarLogo(), actions: const [SettingsButton()]),
+      appBar: AppBar(title: const AppBarLogo(), actions: const [NotificationsButton(), SettingsButton()]),
       body: SafeArea(
         child: AsyncView(
           value: details,

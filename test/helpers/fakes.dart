@@ -8,8 +8,10 @@ import 'package:bhutan_services/features/auth/data/auth_repository.dart';
 import 'package:bhutan_services/features/customer/data/directory_repository.dart';
 import 'package:bhutan_services/features/customer/data/report_repository.dart';
 import 'package:bhutan_services/features/customer/data/review_repository.dart';
+import 'package:bhutan_services/features/notifications/data/notification_repository.dart';
 import 'package:bhutan_services/features/profile/data/profile_repository.dart';
 import 'package:bhutan_services/features/worker/data/worker_repository.dart';
+import 'package:bhutan_services/shared/models/app_notification.dart';
 import 'package:bhutan_services/shared/models/profile.dart';
 import 'package:bhutan_services/shared/models/review.dart';
 import 'package:bhutan_services/shared/models/service_category.dart';
@@ -362,6 +364,45 @@ class FakeReportRepository implements ReportRepository {
   }
 }
 
+/// Like Realtime, every change sends the whole list again, newest first.
+/// [arrive] is a notification the database has just added.
+class FakeNotificationRepository implements NotificationRepository {
+  FakeNotificationRepository([List<AppNotification>? notifications])
+      : notifications = notifications ?? [];
+
+  final List<AppNotification> notifications;
+  final contacts = <({String workerId, String method})>[];
+  final _changes = StreamController<List<AppNotification>>.broadcast();
+
+  void arrive(AppNotification notification) {
+    notifications.insert(0, notification);
+    _changes.add([...notifications]);
+  }
+
+  @override
+  Stream<List<AppNotification>> watchMine() async* {
+    yield [...notifications];
+    yield* _changes.stream;
+  }
+
+  @override
+  Future<void> markRead(String id) async => _markRead((n) => n.id == id);
+
+  @override
+  Future<void> markAllRead() async => _markRead((_) => true);
+
+  void _markRead(bool Function(AppNotification) which) {
+    for (final (i, n) in notifications.indexed) {
+      if (which(n)) notifications[i] = n.markedRead(DateTime(2026, 9, 29));
+    }
+    _changes.add([...notifications]);
+  }
+
+  @override
+  Future<void> notifyContact(String workerId, String method) async =>
+      contacts.add((workerId: workerId, method: method));
+}
+
 // Test data.
 
 const plumber = ServiceCategory(id: 'cat-plumber', name: 'Plumber', icon: 'plumber', isActive: true);
@@ -393,6 +434,20 @@ WorkerListing listing({
       reviewCount: reviewCount,
     );
 
+AppNotification notice(
+  String type, {
+  String? id,
+  Map<String, dynamic> data = const {},
+  bool read = false,
+}) =>
+    AppNotification(
+      id: id ?? type,
+      type: type,
+      data: data,
+      createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
+      readAt: read ? DateTime(2026, 9, 28) : null,
+    );
+
 WorkerService offers(String workerId, ServiceCategory category, {String? price}) => WorkerService(
       workerId: workerId,
       categoryId: category.id,
@@ -411,6 +466,7 @@ class Fakes {
     required this.reviews,
     required this.reports,
     required this.admin,
+    required this.notifications,
   });
 
   final FakeAuthRepository auth;
@@ -420,6 +476,7 @@ class Fakes {
   final FakeReviewRepository reviews;
   final FakeReportRepository reports;
   final FakeAdminRepository admin;
+  final FakeNotificationRepository notifications;
 }
 
 Future<Fakes> pumpApp(
@@ -434,6 +491,7 @@ Future<Fakes> pumpApp(
   bool active = true,
   String? deactivatedReason,
   List<Profile> users = const [], // what an admin sees under Users
+  List<AppNotification> notifications = const [],
 }) async {
   // A phone-sized screen (iPhone 16).
   tester.view.physicalSize = const Size(1179, 2556);
@@ -457,6 +515,7 @@ Future<Fakes> pumpApp(
     reviews: reviews ?? FakeReviewRepository(),
     reports: FakeReportRepository(),
     admin: FakeAdminRepository(directory, [...users]),
+    notifications: FakeNotificationRepository([...notifications]),
   );
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -467,6 +526,7 @@ Future<Fakes> pumpApp(
       reviewRepositoryProvider.overrideWithValue(fakes.reviews),
       reportRepositoryProvider.overrideWithValue(fakes.reports),
       adminRepositoryProvider.overrideWithValue(fakes.admin),
+      notificationRepositoryProvider.overrideWithValue(fakes.notifications),
     ],
     child: const BhutanServicesApp(),
   ));

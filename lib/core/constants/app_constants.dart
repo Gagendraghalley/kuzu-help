@@ -25,6 +25,29 @@ class ReportReasons {
   ];
 }
 
+/// notifications.type values (supabase/updates.sql, section 5).
+class NotificationTypes {
+  static const welcome = 'welcome';
+  static const newUser = 'new_user';                     // admins
+  static const workerSubmitted = 'worker_submitted';     // admins
+  static const workerResubmitted = 'worker_resubmitted'; // admins
+  static const reportNew = 'report_new';                 // admins
+  static const workerApproved = 'worker_approved';
+  static const workerRejected = 'worker_rejected';
+  static const reviewNew = 'review_new';
+  static const reviewUpdated = 'review_updated';
+  static const contact = 'contact';
+  static const reportUpdated = 'report_updated';
+  static const accountDeactivated = 'account_deactivated';
+  static const accountReactivated = 'account_reactivated';
+}
+
+/// C3: which contact button a customer tapped (record_contact in updates.sql).
+class ContactMethod {
+  static const call = 'call';
+  static const whatsapp = 'whatsapp';
+}
+
 /// C2 sort orders.
 enum WorkerSort { rating, reviews, experience }
 

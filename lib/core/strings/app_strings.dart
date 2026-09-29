@@ -314,6 +314,74 @@ class AppStrings {
   static const emailCantChange = "Used to log in. It can't be changed here.";
   static const profileSaved = 'Your profile is saved';
 
+  // Notifications (the bell on each home screen)
+  static const notifications = 'Notifications';
+  static const markAllRead = 'Mark all as read';
+  static const noNotifications = "Nothing yet. We'll let you know here when something happens.";
+
+  /// Worded here from the type and data the database saves, so they can be translated.
+  static String notificationTitle(String type, Map<String, dynamic> data) {
+    String text(String key, String fallback) {
+      final value = (data[key] as String?)?.trim() ?? '';
+      return value.isEmpty ? fallback : value;
+    }
+
+    final rating = data['rating'] as int? ?? 0;
+    return switch (type) {
+      NotificationTypes.welcome => 'Welcome to Kuzu Help!',
+      NotificationTypes.newUser =>
+        '${text('name', 'Someone')} joined as a ${roleLabel(text('role', UserRole.customer)).toLowerCase()}',
+      NotificationTypes.workerSubmitted => '${text('name', 'A worker')} is waiting for approval',
+      NotificationTypes.workerResubmitted => '${text('name', 'A worker')} asks to be checked again',
+      NotificationTypes.reportNew => 'New report about ${text('worker_name', 'a worker')}',
+      NotificationTypes.workerApproved => approvedTitle,
+      NotificationTypes.workerRejected => rejectedTitle,
+      NotificationTypes.reviewNew => 'A customer rated you ${starsLabel(rating)}',
+      NotificationTypes.reviewUpdated => 'A customer changed their rating to ${starsLabel(rating)}',
+      NotificationTypes.contact => 'A customer is getting in touch',
+      NotificationTypes.reportUpdated => 'Update on your report about ${text('worker_name', 'a worker')}',
+      NotificationTypes.accountDeactivated => deactivatedTitle,
+      NotificationTypes.accountReactivated => 'Your account is active again',
+      _ => appName,
+    };
+  }
+
+  static String notificationBody(String type, Map<String, dynamic> data) {
+    final note = (data['note'] as String? ?? data['reason'] as String? ?? '').trim();
+    return switch (type) {
+      NotificationTypes.welcome => data['role'] == UserRole.worker
+          ? 'Set up your worker profile. Our team checks it before customers can see you.'
+          : 'Choose a service to find trusted local workers near you.',
+      NotificationTypes.newUser => data['email'] as String? ?? '',
+      NotificationTypes.workerSubmitted => 'They sent their documents. Tap to check them.',
+      NotificationTypes.workerResubmitted => 'They have fixed their details. Tap to check them.',
+      NotificationTypes.reportNew => reportReason(data['reason'] as String? ?? ''),
+      NotificationTypes.workerApproved => approvedMessage,
+      NotificationTypes.workerRejected => note.isEmpty ? rejectedMessage : note,
+      NotificationTypes.reviewNew || NotificationTypes.reviewUpdated => 'Tap to see your reviews.',
+      NotificationTypes.contact => data['method'] == ContactMethod.whatsapp
+          ? 'They tapped WhatsApp on your profile, so check your messages.'
+          : 'They tapped Call on your profile, so expect a phone call.',
+      NotificationTypes.reportUpdated => switch (data['status']) {
+          'reviewed' => 'Our team has looked into it. Thank you for telling us.',
+          'closed' => 'Our team has closed it. Thank you for telling us.',
+          _ => 'Our team is looking into it.',
+        },
+      NotificationTypes.accountDeactivated => note.isEmpty ? deactivatedMessage : note,
+      NotificationTypes.accountReactivated => 'You can use Kuzu Help again.',
+      _ => '',
+    };
+  }
+
+  static String timeAgo(DateTime time, {DateTime? now}) {
+    final ago = (now ?? DateTime.now()).difference(time);
+    if (ago.inMinutes < 1) return 'Just now';
+    if (ago.inHours < 1) return '${ago.inMinutes} min ago';
+    if (ago.inDays < 1) return ago.inHours == 1 ? '1 hour ago' : '${ago.inHours} hours ago';
+    if (ago.inDays < 7) return ago.inDays == 1 ? '1 day ago' : '${ago.inDays} days ago';
+    return shortDate(time);
+  }
+
   // Shared
   static const retry = 'Retry';
   static const genericError = 'Something went wrong. Please check your internet and try again.';

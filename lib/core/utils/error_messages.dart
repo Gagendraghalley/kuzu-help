@@ -26,8 +26,8 @@ class ErrorMessages {
       }
       if (code == ErrorCode.validationFailed.code) return AppStrings.invalidEmail;
     }
-    // A database function the app calls isn't there (see supabase/updates.sql).
-    if (error is PostgrestException && error.code == 'PGRST202') {
+    // A database function or table the app uses isn't there (see supabase/updates.sql).
+    if (error is PostgrestException && (error.code == 'PGRST202' || error.code == 'PGRST205')) {
       return AppStrings.databaseUpdateNeeded;
     }
     // Everything else, including no internet and database errors.

@@ -1,21 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/launcher_utils.dart';
+import '../../notifications/data/notification_repository.dart';
 
-/// Big Call and WhatsApp buttons using LauncherUtils (C3).
-class ContactButtons extends StatelessWidget {
+/// Big Call and WhatsApp buttons using LauncherUtils (C3). Each tap also
+/// tells the worker someone is getting in touch.
+class ContactButtons extends ConsumerWidget {
+  final String workerId;
   final String phone;
 
-  const ContactButtons({super.key, required this.phone});
+  const ContactButtons({super.key, required this.workerId, required this.phone});
 
-  /// Tells the user when the phone has no app for the link.
-  static Future<void> _open(
+  /// Tells the user when the phone has no app for the link. Telling the worker
+  /// never holds up or stops the call: if it fails, they just aren't told.
+  Future<void> _open(
     BuildContext context,
+    WidgetRef ref,
+    String method,
     Future<bool> Function() launch,
     String failMessage,
   ) async {
+    ref.read(notificationRepositoryProvider).notifyContact(workerId, method).ignore();
     bool opened;
     try {
       opened = await launch();
@@ -28,15 +37,15 @@ class ContactButtons extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Row(
       children: [
         Expanded(
           child: FilledButton.icon(
             icon: const Icon(Icons.call),
             label: const Text(AppStrings.call),
-            onPressed: () =>
-                _open(context, () => LauncherUtils.call(phone), AppStrings.cannotOpenPhone),
+            onPressed: () => _open(context, ref, ContactMethod.call, () => LauncherUtils.call(phone),
+                AppStrings.cannotOpenPhone),
           ),
         ),
         const SizedBox(width: 12),
@@ -45,8 +54,8 @@ class ContactButtons extends StatelessWidget {
             style: FilledButton.styleFrom(backgroundColor: AppColors.whatsapp),
             icon: const Icon(Icons.chat),
             label: const Text(AppStrings.whatsapp),
-            onPressed: () =>
-                _open(context, () => LauncherUtils.whatsapp(phone), AppStrings.cannotOpenWhatsapp),
+            onPressed: () => _open(context, ref, ContactMethod.whatsapp,
+                () => LauncherUtils.whatsapp(phone), AppStrings.cannotOpenWhatsapp),
           ),
         ),
       ],
