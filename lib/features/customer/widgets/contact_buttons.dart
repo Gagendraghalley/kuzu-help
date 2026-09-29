@@ -50,7 +50,7 @@ class ContactButtons extends ConsumerWidget {
       children: [
         Expanded(
           child: FilledButton.icon(
-            icon: const Icon(Icons.call),
+            icon: const Icon(Icons.call_rounded),
             label: const Text(AppStrings.call),
             onPressed: () => _open(context, ref, ContactMethod.call, () => LauncherUtils.call(phone),
                 AppStrings.cannotOpenPhone),
@@ -60,7 +60,7 @@ class ContactButtons extends ConsumerWidget {
         Expanded(
           child: FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: AppColors.whatsapp),
-            icon: const Icon(Icons.chat),
+            icon: const Icon(Icons.chat_rounded),
             label: const Text(AppStrings.whatsapp),
             onPressed: () => _open(context, ref, ContactMethod.whatsapp,
                 () => LauncherUtils.whatsapp(phone), AppStrings.cannotOpenWhatsapp),

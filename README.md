@@ -99,6 +99,79 @@ Flutter + Supabase marketplace connecting customers with verified local workers.
    flutter run --dart-define-from-file=config/dev.json
    ```
 
+## Push notifications (optional; Android and iPhone)
+
+Every notification in the bell can also reach the phone when the app is closed. Until
+this is set up, the app works exactly as before (the bell only). Each piece checks its own
+setup, so you can do the steps in any order; pushes start once all are done.
+
+1. **Firebase** (free): create a project at console.firebase.google.com, then *Add app →
+   Android* with the package name `bt.kuzuhelp.bhutan_services`. Download its
+   `google-services.json` (you only read values from it; don't add it to the project or
+   to git) and copy four values into `config/dev.json`:
+
+   | config/dev.json | google-services.json |
+   | --- | --- |
+   | `FIREBASE_PROJECT_ID` | `project_info.project_id` |
+   | `FIREBASE_MESSAGING_SENDER_ID` | `project_info.project_number` |
+   | `FIREBASE_ANDROID_APP_ID` | `client[0].client_info.mobilesdk_app_id` |
+   | `FIREBASE_ANDROID_API_KEY` | `client[0].api_key[0].current_key` |
+
+2. **A key for sending**: Firebase → Project settings → Service accounts → *Generate new
+   private key*. Keep the JSON file private: it lets anyone send pushes to your users.
+
+3. **The send-push Edge Function**: Supabase → Edge Functions → Deploy a new function →
+   Via Editor, name it `send-push`, paste in `supabase/functions/send-push/index.ts`,
+   Deploy. Open its settings and turn **off** *Enforce JWT verification* (the database
+   proves who it is with a secret instead). Then Edge Functions → Secrets, add:
+   - `FIREBASE_SERVICE_ACCOUNT`: the whole JSON file from step 2;
+   - `PUSH_SECRET`: a long random text you make up (e.g. from a password generator).
+
+4. **Tell the database where to send**: in the SQL Editor, run once (your project URL, and
+   the same random text as `PUSH_SECRET`):
+
+   ```sql
+   select vault.create_secret('https://YOUR-PROJECT-ID.supabase.co', 'kuzu_project_url');
+   select vault.create_secret('THE-SAME-RANDOM-TEXT', 'kuzu_push_secret');
+   ```
+
+5. Run the latest `supabase/updates.sql` (section 12 adds the phones' tokens and the sender).
+
+6. Run the app on an Android phone, or an emulator with Google Play, log in and allow
+   notifications. From then on each new notification also arrives on the phone; tapping it
+   opens the same screen as tapping it in the bell. Logging out stops that phone getting
+   them.
+
+Notes:
+- The push text is worded in `send-push/index.ts`, a copy of `AppStrings.notificationTitle`
+  and `notificationBody`: change both together.
+- If pushes don't arrive, look at Edge Functions → send-push → Logs, and in the SQL Editor
+  `select * from net._http_response order by created desc limit 10;` for the database's calls.
+
+### iPhones
+
+The iOS project already has push set up (`ios/Runner/Runner.entitlements`, and
+*remote-notification* in `Info.plist`); the minimum iOS is 15 because of the Firebase SDK.
+It needs a paid Apple Developer team (this project uses team `6E2JNTTC36`), and:
+
+1. **An APNs key** (developer.apple.com → Certificates, Identifiers & Profiles → Keys, with
+   *Apple Push Notifications service* ticked). A team can only have two, and one key serves
+   every app on the team, so an existing one can be reused: you need its `.p8` file (it can
+   only be downloaded once, by whoever created it) and its Key ID. A **Sandbox** key only
+   works for builds run from Xcode / `flutter run`; TestFlight and App Store builds need
+   one that includes **Production**. Keep the `.p8` private: it can send notifications to
+   every app on the team. It goes only into Firebase, never into the app or git.
+2. **Firebase**: *Add app → iOS* with the bundle ID `bt.kuzuhelp.bhutanServices`. From its
+   `GoogleService-Info.plist` (again, only read it) copy `GOOGLE_APP_ID` into
+   `FIREBASE_IOS_APP_ID` and `API_KEY` into `FIREBASE_IOS_API_KEY` in `config/dev.json`.
+   Then Project settings → Cloud Messaging → Apple app configuration → *APNs Authentication
+   Key*: upload the `.p8` with its Key ID and the Team ID.
+3. Steps 2–5 above (the service account, send-push, Vault, `updates.sql`) are shared with
+   Android: do them once.
+4. Test on a real iPhone, run from Xcode or `flutter run` with the team selected under
+   Runner → Signing & Capabilities. (Recent simulators on Apple silicon Macs can receive
+   pushes too, but a real phone is the dependable test.)
+
 ## Platform settings to add after step 2
 
 **android/app/src/main/AndroidManifest.xml**
@@ -124,7 +197,7 @@ Flutter + Supabase marketplace connecting customers with verified local workers.
 | `lib/features/admin` | Workers awaiting approval, Users, Reports, and the 'Admin check' card (approve, reject, deactivate) |
 | `lib/features/notifications` | The bell (unread count) and the Notifications screen |
 | `lib/shared` | Models and reusable widgets |
-| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the delete-account Edge Function (Settings → Delete account) |
+| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the Edge Functions: delete-account (Settings → Delete account) and send-push (push notifications) |
 
 Each feature has `screens/` (display only), `providers/` (Riverpod state) and
 `data/` (the only files that talk to Supabase).

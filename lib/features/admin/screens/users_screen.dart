@@ -53,7 +53,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: AppStrings.searchUsers,
-                  prefixIcon: const Icon(Icons.search),
+                  prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.clear),
                     tooltip: AppStrings.cancel,
@@ -103,12 +103,12 @@ class _UserTile extends StatelessWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: AvatarImage(url: user.avatarUrl, name: user.fullName, size: 48),
-        title: Text(user.fullName, style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(user.fullName, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (email != null) Text(email),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -140,10 +140,10 @@ class _RoleTag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: AppColors.ivory, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: AppColors.peach, borderRadius: BorderRadius.circular(20)),
       child: Text(
         AppStrings.roleLabel(role),
-        style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w600, fontSize: 14),
+        style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w700, fontSize: 13.5),
       ),
     );
   }

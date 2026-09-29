@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../core/utils/price_utils.dart';
 import '../../../shared/models/worker_listing.dart';
 import '../../../shared/models/worker_service.dart';
 import '../../../shared/widgets/async_view.dart';
@@ -65,11 +66,14 @@ class WorkerDetailsScreen extends ConsumerWidget {
           : DecoratedBox(
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 24, offset: const Offset(0, -6)),
+                ],
               ),
               child: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                   child: ContactButtons(workerId: workerId, phone: phone),
                 ),
               ),
@@ -111,8 +115,8 @@ class _SaveButtonState extends ConsumerState<_SaveButton> {
     final saved = ref.watch(isSavedProvider(widget.workerId)).valueOrNull;
     return IconButton(
       tooltip: saved == true ? AppStrings.unsaveWorker : AppStrings.saveWorker,
-      icon: Icon(saved == true ? Icons.favorite : Icons.favorite_border,
-          color: saved == true ? AppColors.error : null),
+      icon: Icon(saved == true ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          color: saved == true ? const Color(0xFFD64545) : null),
       onPressed: saved == null || _saving ? null : () => _toggle(saved),
     );
   }
@@ -143,39 +147,59 @@ class _Details extends ConsumerWidget {
         children: [
           if (isMe) ...[
             const InfoNote(icon: Icons.visibility_outlined, text: AppStrings.yourPublicProfile),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
           ] else if (ref.watch(isAdminProvider)) ...[
             AdminReviewCard(worker: worker),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
           ],
-          Center(child: AvatarImage(url: worker.avatarUrl, name: worker.fullName, size: 112)),
+          // Profile card: a strip in the brand colours behind the photo.
+          Card(
+            child: Stack(
+              children: [
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 92,
+                  child: DecoratedBox(decoration: BoxDecoration(gradient: AppColors.brandGradient)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 36, 20, 22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: AvatarImage(url: worker.avatarUrl, name: worker.fullName, size: 112, ring: true),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(worker.fullName, textAlign: TextAlign.center, style: text.headlineSmall),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.location_on_outlined, size: 18, color: muted),
+                          const SizedBox(width: 4),
+                          Flexible(child: Text(worker.location, style: TextStyle(color: muted))),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (!worker.isActive) const DeactivatedBadge(),
+                          VerifiedBadge(status: worker.verificationStatus),
+                          AvailabilityLabel(isAvailable: worker.isAvailable),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
-          Text(
-            worker.fullName,
-            textAlign: TextAlign.center,
-            style: text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (!worker.isActive) const DeactivatedBadge(),
-              VerifiedBadge(status: worker.verificationStatus),
-              AvailabilityLabel(isAvailable: worker.isAvailable),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.location_on_outlined, size: 18, color: muted),
-              const SizedBox(width: 4),
-              Flexible(child: Text(worker.location, style: TextStyle(color: muted))),
-            ],
-          ),
-          const SizedBox(height: 20),
           WorkerStats(worker: worker),
           if (!worker.isAvailable) ...[
             const SizedBox(height: 12),
@@ -186,17 +210,22 @@ class _Details extends ConsumerWidget {
             _JobRequestButton(worker: worker),
           ],
           if (bio.isNotEmpty) ...[
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             const SectionHeader(AppStrings.about),
-            const SizedBox(height: 8),
-            Text(bio, style: text.bodyLarge),
+            const SizedBox(height: 10),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(bio, style: text.bodyLarge?.copyWith(color: AppColors.inkSoft)),
+              ),
+            ),
           ],
           _WorkPhotos(workerId: worker.id),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           const SectionHeader(AppStrings.services),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _ServiceList(services: details.services),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           // Only workers customers can see can be reviewed or reported.
           _Reviews(workerId: worker.id, count: worker.reviewCount, isMe: isMe, canReview: !isMe && listed),
           if (!isMe && listed) ...[
@@ -227,7 +256,7 @@ class _JobRequestButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (ref.watch(openJobWithProvider(worker.id)) != null) {
       return OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
         icon: const Icon(Icons.assignment_outlined),
         label: const Text(AppStrings.seeYourRequest),
         onPressed: () => context.push(Routes.jobs),
@@ -235,6 +264,10 @@ class _JobRequestButton extends ConsumerWidget {
     }
     if (!worker.isAvailable) return const SizedBox.shrink();
     return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        elevation: 2,
+        shadowColor: AppColors.primaryDeep.withValues(alpha: 0.4),
+      ),
       icon: const Icon(Icons.assignment_add),
       label: const Text(AppStrings.requestJob),
       onPressed: () => context.push(Routes.requestJobFor(worker.id)),
@@ -255,16 +288,16 @@ class _WorkPhotos extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         const SectionHeader(AppStrings.workPhotos),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         SizedBox(
-          height: 120,
+          height: 128,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: photos.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, i) => PhotoThumb(url: photos[i].url, size: 120),
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) => PhotoThumb(url: photos[i].url, size: 128),
           ),
         ),
       ],
@@ -283,11 +316,17 @@ class _ServiceList extends StatelessWidget {
       child: Column(
         children: [
           for (final (i, service) in services.indexed) ...[
-            if (i > 0) const Divider(indent: 16, endIndent: 16),
+            if (i > 0) const Divider(indent: 72, endIndent: 16),
             ListTile(
-              leading: CategoryIcon(name: service.categoryIcon, size: 40),
-              title: Text(service.categoryName ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(service.priceNote ?? AppStrings.askForPrice),
+              leading: CategoryIcon(name: service.categoryIcon, size: 44),
+              title: Text(service.categoryName ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                PriceUtils.display(service.priceNote) ?? AppStrings.askForPrice,
+                style: TextStyle(
+                  color: service.priceNote == null ? AppColors.muted : AppColors.primaryDeep,
+                  fontWeight: service.priceNote == null ? FontWeight.w400 : FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ],
@@ -327,6 +366,7 @@ class _Reviews extends ConsumerWidget {
           const SizedBox(height: 8),
           const InfoNote(icon: Icons.rate_review_outlined, text: AppStrings.reviewAfterContact),
         ],
+        const SizedBox(height: 10),
         reviews.when(
           loading: () => const Padding(
             padding: EdgeInsets.all(16),
@@ -349,22 +389,27 @@ class _Reviews extends ConsumerWidget {
                     style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 )
-              : Column(
-                  children: [
-                    for (final (i, review) in reviews.indexed) ...[
-                      if (i > 0) const Divider(),
-                      ReviewTile(
-                        review: review,
-                        onReply: isMe
-                            ? () async {
-                                final saved = await replyToReview(context, review,
-                                    (reply) => ref.read(reviewRepositoryProvider).replyToReview(review.id, reply));
-                                if (saved) ref.invalidate(workerReviewsProvider(workerId));
-                              }
-                            : null,
-                      ),
-                    ],
-                  ],
+              : Card(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        for (final (i, review) in reviews.indexed) ...[
+                          if (i > 0) const Divider(),
+                          ReviewTile(
+                            review: review,
+                            onReply: isMe
+                                ? () async {
+                                    final saved = await replyToReview(context, review,
+                                        (reply) => ref.read(reviewRepositoryProvider).replyToReview(review.id, reply));
+                                    if (saved) ref.invalidate(workerReviewsProvider(workerId));
+                                  }
+                                : null,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
         ),
       ],

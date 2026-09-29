@@ -40,19 +40,38 @@ class AvatarPicker extends StatelessWidget {
         Stack(
           children: [
             picked != null
-                ? ClipOval(child: Image.memory(picked, width: _size, height: _size, fit: BoxFit.cover))
-                : AvatarImage(url: currentUrl, name: name, size: _size),
+                ? Container(
+                    width: _size,
+                    height: _size,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    child: ClipOval(child: Image.memory(picked, fit: BoxFit.cover)),
+                  )
+                : AvatarImage(url: currentUrl, name: name, size: _size, ring: true),
             Positioned(
               right: 0,
               bottom: 0,
-              child: IconButton.filled(
-                icon: const Icon(Icons.photo_camera),
-                tooltip: label,
-                onPressed: () => _pick(context),
+              child: DecoratedBox(
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: IconButton.filled(
+                    icon: const Icon(Icons.photo_camera_rounded, size: 20),
+                    tooltip: label,
+                    onPressed: () => _pick(context),
+                  ),
+                ),
               ),
             ),
           ],
         ),
+        const SizedBox(height: 4),
         TextButton(onPressed: () => _pick(context), child: Text(label)),
       ],
     );

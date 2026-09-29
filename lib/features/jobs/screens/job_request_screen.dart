@@ -7,11 +7,13 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/text_utils.dart';
 import '../../../shared/models/profile.dart';
 import '../../../shared/widgets/async_view.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/photo_picker.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../customer/data/directory_repository.dart';
@@ -134,11 +136,14 @@ class _JobFormState extends ConsumerState<_JobForm> {
         padding: const EdgeInsets.all(24),
         children: [
           Text(AppStrings.jobRequestIntro(widget.details.worker.fullName),
-              style: Theme.of(context).textTheme.bodyLarge),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.inkSoft)),
           const SizedBox(height: 20),
           if (services.length > 1) ...[
             DropdownButtonFormField<String>(
               initialValue: _categoryId,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: Colors.white,
               decoration: const InputDecoration(labelText: AppStrings.jobService),
               items: [
                 for (final service in services)
@@ -189,15 +194,17 @@ class _JobFormState extends ConsumerState<_JobForm> {
           ),
           const SizedBox(height: 16),
           Card(
-            clipBehavior: Clip.antiAlias,
             child: ListTile(
               contentPadding: const EdgeInsets.all(12),
               leading: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(14),
                 child: SizedBox.square(
                   dimension: 56,
                   child: photo == null
-                      ? const Icon(Icons.add_a_photo_outlined)
+                      ? const ColoredBox(
+                          color: AppColors.peach,
+                          child: Icon(Icons.add_a_photo_outlined, color: AppColors.primaryDeep),
+                        )
                       : Image.memory(photo, fit: BoxFit.cover),
                 ),
               ),
@@ -211,10 +218,7 @@ class _JobFormState extends ConsumerState<_JobForm> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Semantics(
-              liveRegion: true,
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
+            FormError(_error!),
           ],
           const SizedBox(height: 24),
           PrimaryButton(label: AppStrings.sendRequest, isLoading: _sending, onPressed: _send),

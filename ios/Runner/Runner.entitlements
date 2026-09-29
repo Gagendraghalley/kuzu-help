@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Push notifications (Firebase Cloud Messaging through Apple's push service).
+	     'development' while running from Xcode; Xcode switches it to production
+	     when the app is archived for the App Store or TestFlight. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

@@ -15,7 +15,7 @@ class PhotoThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: SizedBox.square(
         dimension: size,
         child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const _Broken()),
@@ -23,7 +23,7 @@ class PhotoThumb extends StatelessWidget {
     );
     if (!expandable) return image;
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       onTap: () => showPhoto(context, url),
       child: image,
     );
@@ -59,5 +59,5 @@ class _Broken extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const ColoredBox(color: AppColors.ivory, child: Center(child: Icon(Icons.broken_image_outlined)));
+      const ColoredBox(color: AppColors.sand, child: Center(child: Icon(Icons.broken_image_outlined, color: AppColors.muted)));
 }

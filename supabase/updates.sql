@@ -16,6 +16,7 @@
 --   9. Photos of workers' past work.
 --  10. Customers save workers.
 --  11. Job requests: customers send them, workers accept or decline.
+--  12. Push notifications: each notification also goes to the user's phones.
 -- The last line makes the app see the changes straight away.
 -- =====================================================================
 
@@ -1047,6 +1048,121 @@ create policy "storage: photos read own, job photos by the job's worker"
       ))
     )
   );
+
+
+-- ---------------------------------------------------------------------
+-- 12. Push notifications
+-- ---------------------------------------------------------------------
+-- Every notification (section 5) is also sent to the user's phones through
+-- Firebase Cloud Messaging, so they see it with the app closed. Nothing is
+-- sent until push is set up (README, 'Push notifications'): Firebase, the
+-- send-push Edge Function, and two Vault secrets. Until then, and if sending
+-- ever fails, notifications still reach the bell as before.
+--
+-- push_tokens: which phones get which user's notifications. A phone's token
+-- moves to whoever logs in on it last; logging out removes it.
+create table if not exists public.push_tokens (
+  token       text primary key,
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  platform    text not null check (platform in ('android', 'ios')),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists push_tokens_user_idx on public.push_tokens (user_id);
+
+-- Only through the two functions below; nobody reads other people's tokens.
+alter table public.push_tokens enable row level security;
+revoke all on public.push_tokens from anon, authenticated;
+
+create or replace function public.register_push_token(push_token text, device_platform text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Log in first' using errcode = '42501';
+  end if;
+  if device_platform not in ('android', 'ios') then
+    raise exception 'Unknown platform: %', device_platform using errcode = '22023';
+  end if;
+  if char_length(push_token) not between 1 and 4096 then
+    raise exception 'Not a push token' using errcode = '22023';
+  end if;
+
+  insert into public.push_tokens as t (token, user_id, platform)
+  values (push_token, (select auth.uid()), device_platform)
+  on conflict (token) do update
+    set user_id = excluded.user_id, platform = excluded.platform, updated_at = now();
+end;
+$$;
+
+create or replace function public.unregister_push_token(push_token text)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  delete from public.push_tokens where token = push_token and user_id = (select auth.uid());
+$$;
+
+revoke execute on function public.register_push_token(text, text), public.unregister_push_token(text)
+  from public, anon;
+grant execute on function public.register_push_token(text, text), public.unregister_push_token(text)
+  to authenticated;
+
+-- pg_net lets the database call the Edge Function. Supabase has it; if a
+-- database doesn't, push just stays off.
+do $$
+begin
+  create extension if not exists pg_net with schema extensions;
+exception when others then
+  raise notice 'pg_net is not available, so push notifications are off: %', sqlerrm;
+end;
+$$;
+
+-- A new notification for someone with a registered phone: ask the send-push
+-- Edge Function to deliver it. The function's address and a shared secret
+-- come from Supabase Vault (README); without them nothing is sent. The call
+-- happens after the notification is saved, and any problem here is only
+-- logged, so push can never stop a notification.
+create or replace function public.send_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  project_url text;
+  push_secret text;
+begin
+  if not exists (select 1 from public.push_tokens where user_id = new.user_id) then
+    return new;
+  end if;
+  select decrypted_secret into project_url from vault.decrypted_secrets where name = 'kuzu_project_url';
+  select decrypted_secret into push_secret from vault.decrypted_secrets where name = 'kuzu_push_secret';
+  if project_url is null or push_secret is null then
+    return new;
+  end if;
+
+  perform net.http_post(
+    url := rtrim(project_url, '/') || '/functions/v1/send-push',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', push_secret),
+    body := jsonb_build_object('notification_id', new.id)
+  );
+  return new;
+exception when others then
+  raise warning 'Push notification not sent: %', sqlerrm;
+  return new;
+end;
+$$;
+
+revoke execute on function public.send_push() from public, anon, authenticated;
+
+drop trigger if exists notifications_send_push on public.notifications;
+create trigger notifications_send_push
+  after insert on public.notifications
+  for each row execute function public.send_push();
 
 
 -- Make the app's API see the new functions now, not in a few minutes.

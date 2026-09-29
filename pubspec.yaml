@@ -17,6 +17,8 @@ dependencies:
   flutter_image_compress: ^2.3.0
   cached_network_image: ^3.4.1
   shared_preferences: ^2.3.3
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
 
 dev_dependencies:
   flutter_test:
@@ -28,3 +30,17 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/categories/
+  # Plus Jakarta Sans (SIL Open Font License, assets/fonts/OFL.txt), bundled
+  # so text looks the same on every phone without downloading anything.
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
+          weight: 800

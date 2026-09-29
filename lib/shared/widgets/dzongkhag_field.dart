@@ -23,6 +23,9 @@ class DzongkhagField extends StatelessWidget {
       items: [for (final d in kDzongkhags) DropdownMenuItem(value: d, child: Text(d))],
       onChanged: onChanged,
       menuMaxHeight: 400,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      borderRadius: BorderRadius.circular(16),
+      dropdownColor: Colors.white,
       decoration: const InputDecoration(labelText: AppStrings.dzongkhag),
       validator: required ? (v) => v == null ? AppStrings.chooseDzongkhag : null : null,
     );

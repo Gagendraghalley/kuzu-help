@@ -15,12 +15,12 @@ class VerifiedBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (status) {
       VerificationStatus.approved =>
-        const _Tag(color: AppColors.verified, icon: Icons.verified, label: AppStrings.verified),
+        const _Tag(color: AppColors.verified, icon: Icons.verified_rounded, label: AppStrings.verified),
       VerificationStatus.rejected =>
-        const _Tag(color: AppColors.error, icon: Icons.block, label: AppStrings.notApproved),
+        const _Tag(color: AppColors.error, icon: Icons.block_rounded, label: AppStrings.notApproved),
       _ => const _Tag(
           color: AppColors.primaryDeep,
-          icon: Icons.hourglass_top,
+          icon: Icons.hourglass_top_rounded,
           label: AppStrings.awaitingApproval,
         ),
     };
@@ -33,7 +33,7 @@ class DeactivatedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const _Tag(color: AppColors.error, icon: Icons.block, label: AppStrings.deactivated);
+      const _Tag(color: AppColors.error, icon: Icons.block_rounded, label: AppStrings.deactivated);
 }
 
 /// Green 'Available' or grey 'Not available' (worker cards, C3).
@@ -47,7 +47,7 @@ class AvailabilityLabel extends StatelessWidget {
     return _Tag(
       color: isAvailable ? AppColors.verified : Theme.of(context).colorScheme.onSurfaceVariant,
       icon: Icons.circle,
-      iconSize: 10,
+      iconSize: 8,
       label: isAvailable ? AppStrings.available : AppStrings.notAvailable,
     );
   }
@@ -59,15 +59,16 @@ class _Tag extends StatelessWidget {
   final double iconSize;
   final String label;
 
-  const _Tag({required this.color, required this.icon, required this.label, this.iconSize = 16});
+  const _Tag({required this.color, required this.icon, required this.label, this.iconSize = 15});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: Color.alphaBlend(color.withValues(alpha: 0.09), Colors.white),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -76,7 +77,10 @@ class _Tag extends StatelessWidget {
           const SizedBox(width: 6),
           // Wraps rather than overflowing on narrow cards or with large text.
           Flexible(
-            child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 14)),
+            child: Text(
+              label,
+              style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13.5, height: 1.2),
+            ),
           ),
         ],
       ),

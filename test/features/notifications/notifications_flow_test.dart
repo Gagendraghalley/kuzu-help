@@ -1,5 +1,6 @@
 import 'package:bhutan_services/core/constants/app_constants.dart';
 import 'package:bhutan_services/core/strings/app_strings.dart';
+import 'package:bhutan_services/shared/models/app_notification.dart';
 import 'package:bhutan_services/shared/models/verification.dart';
 import 'package:bhutan_services/shared/models/worker_profile.dart';
 import 'package:flutter/material.dart';
@@ -183,6 +184,45 @@ void main() {
       (workerId: 'pema', method: ContactMethod.call),
       (workerId: 'pema', method: ContactMethod.whatsapp),
     ]);
+  });
+
+  group('push notifications', () {
+    testWidgets("a logged-in user's phone is registered, and logging out unregisters it", (tester) async {
+      final fakes = await pumpApp(tester, loggedIn: true, hasPassword: true);
+      expect(fakes.push.registrations, 1);
+
+      await tester.tap(find.byTooltip(AppStrings.settings));
+      await tester.pumpAndSettle();
+      await tapAndSettle(tester, AppStrings.logout);
+      await tester.tap(find.widgetWithText(FilledButton, AppStrings.logout));
+      await tester.pumpAndSettle();
+      expect(fakes.push.unregistrations, 1);
+      expect(fakes.auth.isLoggedIn, isFalse);
+    });
+
+    testWidgets('tapping a push notification opens what it is about', (tester) async {
+      final fakes = await pumpApp(tester, loggedIn: true, hasPassword: true);
+
+      fakes.push.tap({
+        'notification_id': 'n1',
+        'type': NotificationTypes.jobAccepted,
+        'payload': '{"worker_name": "Pema Dorji", "note": "I can come at 9am."}',
+      });
+      await tester.pumpAndSettle();
+      expect(find.text(AppStrings.myJobRequests), findsWidgets); // the screen's title
+      expect(find.text(AppStrings.pastJobs), findsOneWidget);
+    });
+
+    test("reads a push notification's data, and ignores other apps' pushes", () {
+      final n = AppNotification.fromPush({
+        'notification_id': 'n1',
+        'type': NotificationTypes.reviewNew,
+        'payload': '{"worker_id": "w1", "rating": 4}',
+      })!;
+      expect((n.id, n.type, n.workerId, n.data['rating']), ('n1', NotificationTypes.reviewNew, 'w1', 4));
+      expect(title(n.type, n.data), 'A customer rated you 4 stars');
+      expect(AppNotification.fromPush({'from': 'someone-else'}), isNull);
+    });
   });
 
   group('wording', () {

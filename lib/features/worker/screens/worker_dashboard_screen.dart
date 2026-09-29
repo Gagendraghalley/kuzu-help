@@ -6,12 +6,15 @@ import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../core/utils/price_utils.dart';
 import '../../../shared/models/worker_listing.dart';
 import '../../../shared/widgets/app_bar_logo.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/avatar_image.dart';
+import '../../../shared/widgets/brand_panel.dart';
 import '../../../shared/widgets/category_icon.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/review_tile.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/verified_badge.dart';
@@ -81,34 +84,55 @@ class _Dashboard extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final muted = TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant);
 
+    Widget link(IconData icon, String label, VoidCallback onTap) => ListTile(
+          leading: IconTile(icon: icon),
+          title: Text(label),
+          trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          onTap: onTap,
+        );
+
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
       children: [
-        Row(
-          children: [
-            AvatarImage(url: worker.avatarUrl, name: worker.fullName, size: 64),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        BrandPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  Text(
-                    AppStrings.greeting(worker.fullName),
-                    style: text.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  AvatarImage(url: worker.avatarUrl, name: worker.fullName, size: 64, ring: true),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppStrings.greeting(worker.fullName),
+                          style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: Colors.white),
+                        ),
+                        const SizedBox(height: 8),
+                        // White behind the badge, so its green reads on the panel.
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.all(Radius.circular(20)),
+                          ),
+                          child: VerifiedBadge(),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  const VerifiedBadge(),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 18),
+              WorkerStats(worker: worker, onBrand: true),
+            ],
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         _Availability(worker: worker),
         const SizedBox(height: 12),
         const _JobRequestsCard(),
-        const SizedBox(height: 20),
-        WorkerStats(worker: worker),
         const SizedBox(height: 28),
         SectionHeader(
           AppStrings.yourServices,
@@ -117,16 +141,21 @@ class _Dashboard extends ConsumerWidget {
             child: const Text(AppStrings.edit),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Card(
           child: Column(
             children: [
               for (final (i, service) in details.services.indexed) ...[
-                if (i > 0) const Divider(indent: 16, endIndent: 16),
+                if (i > 0) const Divider(indent: 72, endIndent: 16),
                 ListTile(
-                  leading: CategoryIcon(name: service.categoryIcon, size: 40),
-                  title: Text(service.categoryName ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(service.priceNote ?? AppStrings.askForPrice),
+                  leading: CategoryIcon(name: service.categoryIcon, size: 44),
+                  title: Text(service.categoryName ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(
+                    PriceUtils.display(service.priceNote) ?? AppStrings.askForPrice,
+                    style: service.priceNote == null
+                        ? null
+                        : const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ],
@@ -136,31 +165,18 @@ class _Dashboard extends ConsumerWidget {
         Card(
           child: Column(
             children: [
-              ListTile(
-                leading: Icon(Icons.person_outline, color: Theme.of(context).colorScheme.primary),
-                title: const Text(AppStrings.editProfile),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(Routes.workerSetup),
-              ),
-              const Divider(indent: 16, endIndent: 16),
-              ListTile(
-                leading: Icon(Icons.photo_library_outlined, color: Theme.of(context).colorScheme.primary),
-                title: const Text(AppStrings.yourWorkPhotos),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(Routes.workPhotos),
-              ),
-              const Divider(indent: 16, endIndent: 16),
-              ListTile(
-                leading: Icon(Icons.visibility_outlined, color: Theme.of(context).colorScheme.primary),
-                title: const Text(AppStrings.seePublicProfile),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(Routes.workerDetailsFor(worker.id)),
-              ),
+              link(Icons.person_outline_rounded, AppStrings.editProfile, () => context.push(Routes.workerSetup)),
+              const Divider(indent: 70, endIndent: 16),
+              link(Icons.photo_library_outlined, AppStrings.yourWorkPhotos, () => context.push(Routes.workPhotos)),
+              const Divider(indent: 70, endIndent: 16),
+              link(Icons.visibility_outlined, AppStrings.seePublicProfile,
+                  () => context.push(Routes.workerDetailsFor(worker.id))),
             ],
           ),
         ),
         const SizedBox(height: 28),
         const SectionHeader(AppStrings.recentReviews),
+        const SizedBox(height: 10),
         reviews.when(
           loading: () => const Padding(
             padding: EdgeInsets.all(16),
@@ -180,20 +196,25 @@ class _Dashboard extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(AppStrings.noReviewsForWorker, style: muted),
                 )
-              : Column(
-                  children: [
-                    for (final (i, review) in reviews.take(WorkerDashboardScreen._recentReviews).indexed) ...[
-                      if (i > 0) const Divider(),
-                      ReviewTile(
-                        review: review,
-                        onReply: () async {
-                          final saved = await replyToReview(context, review,
-                              (reply) => ref.read(reviewRepositoryProvider).replyToReview(review.id, reply));
-                          if (saved) ref.invalidate(workerReviewsProvider(worker.id));
-                        },
-                      ),
-                    ],
-                  ],
+              : Card(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        for (final (i, review) in reviews.take(WorkerDashboardScreen._recentReviews).indexed) ...[
+                          if (i > 0) const Divider(),
+                          ReviewTile(
+                            review: review,
+                            onReply: () async {
+                              final saved = await replyToReview(context, review,
+                                  (reply) => ref.read(reviewRepositoryProvider).replyToReview(review.id, reply));
+                              if (saved) ref.invalidate(workerReviewsProvider(worker.id));
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
         ),
       ],
@@ -209,16 +230,26 @@ class _JobRequestsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final waiting = ref.watch(newJobCountProvider);
     return Card(
-      color: waiting > 0 ? AppColors.ivory : null,
+      color: waiting > 0 ? const Color(0xFFFFF8F1) : null,
+      shape: waiting > 0
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+            )
+          : null,
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: Badge(
           isLabelVisible: waiting > 0,
           label: Text('$waiting'),
-          child: const Icon(Icons.assignment_outlined, color: AppColors.primaryDeep),
+          child: const IconTile(icon: Icons.assignment_outlined, size: 44),
         ),
-        title: const Text(AppStrings.jobRequests, style: TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(AppStrings.newJobRequests(waiting)),
-        trailing: const Icon(Icons.chevron_right),
+        title: const Text(AppStrings.jobRequests, style: TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(
+          AppStrings.newJobRequests(waiting),
+          style: waiting > 0 ? const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w600) : null,
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
         onTap: () => context.push(Routes.jobs),
       ),
     );

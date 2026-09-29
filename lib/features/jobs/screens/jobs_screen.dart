@@ -13,6 +13,7 @@ import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/category_icon.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/photo_viewer.dart';
 import '../../../shared/widgets/text_dialog.dart';
 import '../../customer/providers/worker_details_providers.dart';
@@ -104,24 +105,32 @@ class _JobTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14);
+    final muted = TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13.5);
+    final waiting = asWorker && job.status == JobStatus.pending;
     return Card(
-      clipBehavior: Clip.antiAlias,
-      color: asWorker && job.status == JobStatus.pending ? AppColors.ivory : null,
+      color: waiting ? const Color(0xFFFFF8F1) : null,
+      shape: waiting
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.35)),
+            )
+          : null,
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CategoryIcon(name: job.categoryIcon, size: 44),
+        contentPadding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+        leading: CategoryIcon(name: job.categoryIcon, size: 48),
         title: Text(
           asWorker ? AppStrings.jobFrom(job.customerName) : AppStrings.jobTo(job.workerName),
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(job.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 6),
+            const SizedBox(height: 2),
+            Text(job.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.inkSoft)),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
+              runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _StatusChip(status: job.status),
@@ -130,7 +139,7 @@ class _JobTile extends StatelessWidget {
             ),
           ],
         ),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
         onTap: () => showModalBottomSheet<void>(
           context: context,
           showDragHandle: true,
@@ -156,13 +165,14 @@ class _StatusChip extends StatelessWidget {
       _ => AppColors.primaryDeep,
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: Color.alphaBlend(color.withValues(alpha: 0.1), Colors.white),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Text(AppStrings.jobStatusLabel(status),
-          style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+          style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
     );
   }
 }
@@ -227,17 +237,20 @@ class _JobDetailsState extends ConsumerState<_JobDetails> {
     final note = job.workerNote?.trim() ?? '';
 
     Widget fact(IconData icon, String label, String value) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(bottom: 10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 20, color: AppColors.primaryDeep),
-              const SizedBox(width: 10),
+              IconTile(icon: icon, size: 34),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text.rich(TextSpan(children: [
-                  TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.w600)),
-                  TextSpan(text: value),
-                ])),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 5),
+                  child: Text.rich(TextSpan(children: [
+                    TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    TextSpan(text: value, style: const TextStyle(color: AppColors.inkSoft)),
+                  ])),
+                ),
               ),
             ],
           ),
@@ -252,9 +265,9 @@ class _JobDetailsState extends ConsumerState<_JobDetails> {
           children: [
             Text(
               asWorker ? AppStrings.jobFrom(job.customerName) : AppStrings.jobTo(job.workerName),
-              style: text.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             // Wraps, so large text never runs off the screen.
             Wrap(
               spacing: 8,
@@ -266,7 +279,11 @@ class _JobDetailsState extends ConsumerState<_JobDetails> {
               ],
             ),
             const SizedBox(height: 16),
-            Text(job.description, style: text.bodyLarge),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: AppColors.canvas, borderRadius: BorderRadius.circular(16)),
+              child: Text(job.description, style: text.bodyLarge),
+            ),
             const SizedBox(height: 16),
             fact(Icons.location_on_outlined, AppStrings.jobWhereLabel, job.address),
             if (job.whenNeeded case final needed?) fact(Icons.schedule, AppStrings.jobWhenLabel, needed),
@@ -275,15 +292,19 @@ class _JobDetailsState extends ConsumerState<_JobDetails> {
             if (note.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: AppColors.ivory, borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8F1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(AppStrings.messageFromWorker,
-                        style: text.labelLarge?.copyWith(color: AppColors.primaryDeep)),
+                        style: text.labelLarge?.copyWith(color: AppColors.primaryDeep, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
-                    Text(note),
+                    Text(note, style: const TextStyle(color: AppColors.inkSoft)),
                   ],
                 ),
               ),
@@ -300,8 +321,8 @@ class _JobDetailsState extends ConsumerState<_JobDetails> {
   }
 
   List<Widget> _actions(JobRequest job, bool asWorker) {
-    const gap = SizedBox(height: 8);
-    final outlined = OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52));
+    const gap = SizedBox(height: 10);
+    final outlined = OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54));
     return [
       // The worker calls or messages the customer about an open job.
       if (asWorker && job.isOpen) ...[

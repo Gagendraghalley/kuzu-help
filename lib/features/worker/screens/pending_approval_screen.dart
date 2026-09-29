@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../shared/widgets/app_bar_logo.dart';
 import '../../../shared/widgets/async_view.dart';
+import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../notifications/widgets/notifications_button.dart';
@@ -83,14 +84,14 @@ class _PendingApprovalScreenState extends ConsumerState<PendingApprovalScreen> {
                         const _Checklist(),
                         const SizedBox(height: 16),
                         OutlinedButton.icon(
-                          icon: const Icon(Icons.refresh),
+                          icon: const Icon(Icons.refresh_rounded),
                           label: const Text(AppStrings.checkAgain),
-                          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
                           onPressed: _refresh,
                         ),
                         const SizedBox(height: 32),
                         const SectionHeader(AppStrings.needChanges),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         const _EditLinks(),
                       ],
                   },
@@ -111,14 +112,18 @@ class _Checklist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget step(String label, {required bool done}) => ListTile(
-          leading: Icon(
-            done ? Icons.check_circle : Icons.hourglass_top,
+          leading: IconTile(
+            icon: done ? Icons.check_rounded : Icons.hourglass_top_rounded,
             color: done ? AppColors.verified : AppColors.primaryDeep,
+            size: 36,
           ),
           title: Text(label),
           trailing: Text(
             done ? AppStrings.stepDone : AppStrings.stepWaiting,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: TextStyle(
+              color: done ? AppColors.verified : AppColors.primaryDeep,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         );
 
@@ -126,8 +131,11 @@ class _Checklist extends StatelessWidget {
       child: Column(
         children: [
           step(AppStrings.stepProfile, done: true),
+          const Divider(indent: 66, endIndent: 16),
           step(AppStrings.stepServices, done: true),
+          const Divider(indent: 66, endIndent: 16),
           step(AppStrings.stepDocuments, done: true),
+          const Divider(indent: 66, endIndent: 16),
           step(AppStrings.stepTeamCheck, done: false),
         ],
       ),
@@ -142,19 +150,19 @@ class _EditLinks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget link(IconData icon, String label, String route) => ListTile(
-          leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+          leading: IconTile(icon: icon),
           title: Text(label),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           onTap: () => context.push(route),
         );
 
     return Card(
       child: Column(
         children: [
-          link(Icons.person_outline, AppStrings.editProfile, Routes.workerSetup),
-          const Divider(indent: 16, endIndent: 16),
+          link(Icons.person_outline_rounded, AppStrings.editProfile, Routes.workerSetup),
+          const Divider(indent: 70, endIndent: 16),
           link(Icons.handyman_outlined, AppStrings.editServices, Routes.workerServices),
-          const Divider(indent: 16, endIndent: 16),
+          const Divider(indent: 70, endIndent: 16),
           link(Icons.badge_outlined, AppStrings.updateDocuments, Routes.workerVerification),
         ],
       ),

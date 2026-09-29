@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/worker_card.dart';
@@ -22,14 +23,28 @@ class SearchWorkersScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
-        title: TextField(
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            hintText: AppStrings.searchWorkers,
-            border: InputBorder.none,
+        titleSpacing: 0,
+        title: Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: TextField(
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: AppStrings.searchWorkers,
+              isDense: true,
+              prefixIcon: const Icon(Icons.search_rounded),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.line),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.primaryDeep, width: 1.6),
+              ),
+            ),
+            onChanged: (text) => ref.read(nameSearchProvider.notifier).state = text,
           ),
-          onChanged: (text) => ref.read(nameSearchProvider.notifier).state = text,
         ),
       ),
       body: SafeArea(

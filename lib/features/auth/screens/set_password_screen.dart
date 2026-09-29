@@ -6,9 +6,10 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/error_messages.dart';
-import '../../../shared/widgets/app_bar_logo.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../providers/auth_providers.dart';
+import '../widgets/auth_scaffold.dart';
 import '../widgets/logout_button.dart';
 import '../widgets/password_field.dart';
 
@@ -69,66 +70,50 @@ class _SetPasswordScreenState extends ConsumerState<SetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
     final changing = context.canPop();
 
-    return Scaffold(
-      appBar: changing
-          ? AppBar(title: const Text(AppStrings.changePassword))
-          // No back button: the user is logged in, and a password comes first.
-          : AppBar(
-              title: const AppBarLogo(),
-              automaticallyImplyLeading: false,
-              actions: const [LogoutButton()],
-            ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: AutofillGroup(
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                if (!changing) ...[
-                  Text(
-                    _isReset ? AppStrings.newPasswordTitle : AppStrings.createPasswordTitle,
-                    style: text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                Text(
-                  changing ? AppStrings.changePasswordHint : AppStrings.createPasswordHint,
-                  style: text.bodyLarge,
-                ),
-                const SizedBox(height: 24),
-                PasswordField(
-                  controller: _password,
-                  label: AppStrings.password,
-                  helperText: AppStrings.passwordHint(_minLength),
-                  autofillHints: const [AutofillHints.newPassword],
-                  textInputAction: TextInputAction.next,
-                  validator: (v) =>
-                      (v ?? '').length < _minLength ? AppStrings.passwordTooShort(_minLength) : null,
-                ),
+    return AuthScaffold(
+      icon: Icons.lock_outline_rounded,
+      title: changing
+          ? AppStrings.changePassword
+          : _isReset
+              ? AppStrings.newPasswordTitle
+              : AppStrings.createPasswordTitle,
+      subtitle: changing ? AppStrings.changePasswordHint : AppStrings.createPasswordHint,
+      // No back button during sign-up: the user is logged in, and a password comes first.
+      showBack: changing,
+      actions: changing ? const [] : const [LogoutButton()],
+      child: Form(
+        key: _formKey,
+        child: AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PasswordField(
+                controller: _password,
+                label: AppStrings.password,
+                helperText: AppStrings.passwordHint(_minLength),
+                autofillHints: const [AutofillHints.newPassword],
+                textInputAction: TextInputAction.next,
+                validator: (v) =>
+                    (v ?? '').length < _minLength ? AppStrings.passwordTooShort(_minLength) : null,
+              ),
+              const SizedBox(height: 16),
+              PasswordField(
+                controller: _confirm,
+                label: AppStrings.confirmPassword,
+                autofillHints: const [AutofillHints.newPassword],
+                textInputAction: TextInputAction.done,
+                validator: (v) => v == _password.text ? null : AppStrings.passwordsDontMatch,
+                onFieldSubmitted: (_) => _save(),
+              ),
+              if (_error != null) ...[
                 const SizedBox(height: 16),
-                PasswordField(
-                  controller: _confirm,
-                  label: AppStrings.confirmPassword,
-                  autofillHints: const [AutofillHints.newPassword],
-                  textInputAction: TextInputAction.done,
-                  validator: (v) => v == _password.text ? null : AppStrings.passwordsDontMatch,
-                  onFieldSubmitted: (_) => _save(),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                PrimaryButton(label: AppStrings.savePassword, isLoading: _saving, onPressed: _save),
+                FormError(_error!),
               ],
-            ),
+              const SizedBox(height: 28),
+              PrimaryButton(label: AppStrings.savePassword, isLoading: _saving, onPressed: _save),
+            ],
           ),
         ),
       ),

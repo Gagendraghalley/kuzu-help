@@ -12,6 +12,7 @@ import 'package:bhutan_services/features/customer/data/review_repository.dart';
 import 'package:bhutan_services/features/customer/data/saved_workers_repository.dart';
 import 'package:bhutan_services/features/jobs/data/job_repository.dart';
 import 'package:bhutan_services/features/notifications/data/notification_repository.dart';
+import 'package:bhutan_services/features/notifications/data/push_repository.dart';
 import 'package:bhutan_services/features/profile/data/profile_repository.dart';
 import 'package:bhutan_services/features/worker/data/work_photo_repository.dart';
 import 'package:bhutan_services/features/worker/data/worker_repository.dart';
@@ -455,6 +456,24 @@ class FakeNotificationRepository implements NotificationRepository {
   }
 }
 
+/// Counts registrations; [tap] is the user tapping a push notification.
+class FakePushRepository implements PushRepository {
+  int registrations = 0;
+  int unregistrations = 0;
+  final _taps = StreamController<Map<String, dynamic>>.broadcast();
+
+  void tap(Map<String, dynamic> data) => _taps.add(data);
+
+  @override
+  Future<void> register() async => registrations++;
+
+  @override
+  Future<void> unregister() async => unregistrations++;
+
+  @override
+  Stream<Map<String, dynamic>> get openedNotifications => _taps.stream;
+}
+
 /// [contacted]: workers the customer has been in touch with, so may review.
 class FakeContactRepository implements ContactRepository {
   FakeContactRepository(this.contacted);
@@ -636,6 +655,7 @@ class Fakes {
     required this.saved,
     required this.workPhotos,
     required this.jobs,
+    required this.push,
   });
 
   final FakeAuthRepository auth;
@@ -650,6 +670,7 @@ class Fakes {
   final FakeSavedWorkersRepository saved;
   final FakeWorkPhotoRepository workPhotos;
   final FakeJobRepository jobs;
+  final FakePushRepository push;
 }
 
 Future<Fakes> pumpApp(
@@ -698,6 +719,7 @@ Future<Fakes> pumpApp(
     saved: FakeSavedWorkersRepository(directory, [...saved]),
     workPhotos: FakeWorkPhotoRepository({for (final e in workPhotos.entries) e.key: [...e.value]}),
     jobs: FakeJobRepository([...jobs]),
+    push: FakePushRepository(),
   );
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -713,6 +735,7 @@ Future<Fakes> pumpApp(
       savedWorkersRepositoryProvider.overrideWithValue(fakes.saved),
       workPhotoRepositoryProvider.overrideWithValue(fakes.workPhotos),
       jobRepositoryProvider.overrideWithValue(fakes.jobs),
+      pushRepositoryProvider.overrideWithValue(fakes.push),
     ],
     child: const BhutanServicesApp(),
   ));

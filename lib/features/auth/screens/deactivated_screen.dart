@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../providers/auth_providers.dart';
@@ -26,40 +27,38 @@ class DeactivatedScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.block, size: 48, color: AppColors.error),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                const Center(child: IconHalo(icon: Icons.block_rounded, color: AppColors.error)),
+                const SizedBox(height: 24),
                 Semantics(
                   header: true,
                   child: Text(
                     AppStrings.deactivatedTitle,
                     textAlign: TextAlign.center,
-                    style: text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                    style: text.headlineSmall,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(AppStrings.deactivatedMessage, textAlign: TextAlign.center, style: text.bodyLarge),
+                Text(
+                  AppStrings.deactivatedMessage,
+                  textAlign: TextAlign.center,
+                  style: text.bodyLarge?.copyWith(color: AppColors.inkSoft),
+                ),
                 if (reason.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: AppColors.ivory, borderRadius: BorderRadius.circular(12)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(AppStrings.adminNoteLabel, style: text.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text(reason, style: text.bodyLarge),
-                      ],
+                  const SizedBox(height: 24),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            AppStrings.adminNoteLabel,
+                            style: text.labelLarge?.copyWith(fontWeight: FontWeight.w700, color: AppColors.muted),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(reason, style: text.bodyLarge),
+                        ],
+                      ),
                     ),
                   ),
                 ],

@@ -35,7 +35,7 @@ class WorkerListScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -76,7 +76,7 @@ class WorkerListScreen extends ConsumerWidget {
                           ),
                         )
                       : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                           itemCount: results.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 12),
                           itemBuilder: (context, i) => WorkerCard(

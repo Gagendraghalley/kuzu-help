@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Push notifications' accent: AppColors.primaryDeep (lib/core/theme/app_colors.dart). -->
+    <color name="notification_color">#B8540F</color>
+</resources>

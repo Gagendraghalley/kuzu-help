@@ -91,11 +91,14 @@ class _ReportTile extends StatelessWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: AvatarImage(url: report.workerAvatarUrl, name: report.workerName, size: 48),
-        title: Text(report.workerName, style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(report.workerName, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(AppStrings.reportReason(report.reason), style: const TextStyle(fontWeight: FontWeight.w500)),
+            Text(
+              AppStrings.reportReason(report.reason),
+              style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.primaryDeep),
+            ),
             if (details.isNotEmpty) Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
             Text('${AppStrings.reportedBy(report.reporterName)} · ${AppStrings.timeAgo(report.createdAt)}',

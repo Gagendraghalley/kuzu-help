@@ -4,9 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/text_utils.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../data/report_repository.dart';
 
 /// C5 Report a worker
@@ -77,31 +80,32 @@ class _ReportWorkerScreenState extends ConsumerState<ReportWorkerScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text(AppStrings.reportIntro, style: text.bodyLarge),
+            Text(AppStrings.reportIntro, style: text.bodyLarge?.copyWith(color: AppColors.inkSoft)),
             const SizedBox(height: 24),
-            Semantics(
-              header: true,
-              child: Text(AppStrings.whatHappened, style: text.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 8),
+            const SectionHeader(AppStrings.whatHappened),
+            const SizedBox(height: 10),
             RadioGroup<String>(
               groupValue: _reason,
               onChanged: (reason) => setState(() {
                 _reason = reason;
                 _error = null;
               }),
-              child: Column(
-                children: [
-                  for (final reason in ReportReasons.all)
-                    RadioListTile<String>(
-                      value: reason,
-                      title: Text(AppStrings.reportReason(reason)),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                ],
+              child: Card(
+                child: Column(
+                  children: [
+                    for (final (i, reason) in ReportReasons.all.indexed) ...[
+                      if (i > 0) const Divider(indent: 16, endIndent: 16),
+                      RadioListTile<String>(
+                        value: reason,
+                        title: Text(AppStrings.reportReason(reason)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextField(
               controller: _details,
               minLines: 3,
@@ -116,10 +120,7 @@ class _ReportWorkerScreenState extends ConsumerState<ReportWorkerScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Semantics(
-                liveRegion: true,
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ),
+              FormError(_error!),
             ],
             const SizedBox(height: 24),
             PrimaryButton(label: AppStrings.sendReport, isLoading: _sending, onPressed: _send),

@@ -5,5 +5,5 @@ class LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const Center(child: CircularProgressIndicator());
+      const Center(child: CircularProgressIndicator(strokeWidth: 3, strokeCap: StrokeCap.round));
 }

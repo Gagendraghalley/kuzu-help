@@ -36,19 +36,23 @@ class CodeBoxes extends StatelessWidget {
             children: [
               for (var i = 0; i < length; i++)
                 Expanded(
-                  child: Container(
-                    height: 60,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    height: 62,
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      color: i == value.text.length && !hasError ? const Color(0xFFFFF8F1) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        width: 2,
+                        width: i == value.text.length || hasError ? 2 : 1.2,
                         color: hasError
                             ? colors.error
                             : i == value.text.length
                                 ? colors.primary
-                                : colors.outlineVariant,
+                                : i < value.text.length
+                                    ? colors.outline
+                                    : colors.outlineVariant,
                       ),
                     ),
                     child: Text(i < value.text.length ? value.text[i] : '', style: digitStyle),

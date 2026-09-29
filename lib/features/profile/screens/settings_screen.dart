@@ -11,6 +11,7 @@ import '../../../shared/models/profile.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/avatar_image.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
+import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../data/profile_repository.dart';
@@ -107,11 +108,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           value: profile,
           onRetry: () => ref.invalidate(myProfileProvider),
           data: (profile) => ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
             children: [
               if (profile != null) ...[
                 _ProfileHeader(profile: profile),
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
               ],
               if (profile?.role == UserRole.admin) ...[
                 Card(
@@ -122,13 +123,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label: AppStrings.workersAwaitingApproval,
                         onTap: () => context.push(Routes.pendingWorkers),
                       ),
-                      const Divider(indent: 16, endIndent: 16),
+                      const _Divider(),
                       _Item(
                         icon: Icons.manage_accounts_outlined,
                         label: AppStrings.users,
                         onTap: () => context.push(Routes.users),
                       ),
-                      const Divider(indent: 16, endIndent: 16),
+                      const _Divider(),
                       _Item(
                         icon: Icons.flag_outlined,
                         label: AppStrings.reports,
@@ -140,7 +141,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 28),
               ],
               const SectionHeader(AppStrings.account),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Card(
                 child: Column(
                   children: [
@@ -152,7 +153,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         profile?.role == UserRole.worker ? Routes.workerSetup : Routes.editProfile,
                       ),
                     ),
-                    const Divider(indent: 16, endIndent: 16),
+                    const _Divider(),
                     _Item(
                       icon: Icons.lock_outline,
                       label: AppStrings.changePassword,
@@ -160,28 +161,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     // Customers and workers can switch; admins can't.
                     if (profile?.role == UserRole.worker) ...[
-                      const Divider(indent: 16, endIndent: 16),
+                      const _Divider(),
                       _Item(
                         icon: Icons.handyman_outlined,
                         label: AppStrings.myServices,
                         onTap: () => context.push(Routes.workerServices),
                       ),
-                      const Divider(indent: 16, endIndent: 16),
+                      const _Divider(),
                       _Item(
                         icon: Icons.photo_library_outlined,
                         label: AppStrings.yourWorkPhotos,
                         onTap: () => context.push(Routes.workPhotos),
                       ),
-                      const Divider(indent: 16, endIndent: 16),
+                      const _Divider(),
                       _Item(
-                        icon: Icons.search,
+                        icon: Icons.search_rounded,
                         label: AppStrings.stopOfferingServices,
                         hint: AppStrings.stopOfferingServicesHint,
                         onTap: _busy ? null : _stopOfferingServices,
                       ),
                     ],
                     if (profile?.role == UserRole.customer) ...[
-                      const Divider(indent: 16, endIndent: 16),
+                      const _Divider(),
                       _Item(
                         icon: Icons.storefront_outlined,
                         label: AppStrings.becomeWorker,
@@ -237,32 +238,45 @@ class _ProfileHeader extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final email = profile.email;
 
-    return Row(
-      children: [
-        AvatarImage(url: profile.avatarUrl, name: profile.fullName, size: 72),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(profile.fullName, style: text.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-              if (email != null)
-                Text(email, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: AppColors.ivory, borderRadius: BorderRadius.circular(20)),
-                child: Text(
-                  AppStrings.roleLabel(profile.role),
-                  style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w600),
-                ),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            AvatarImage(url: profile.avatarUrl, name: profile.fullName, size: 68),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(profile.fullName, style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  if (email != null)
+                    Text(email, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14.5)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: AppColors.peach, borderRadius: BorderRadius.circular(20)),
+                    child: Text(
+                      AppStrings.roleLabel(profile.role),
+                      style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
+}
+
+/// A divider that starts after the icon tile, as in grouped settings lists.
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) => const Divider(indent: 70, endIndent: 16);
 }
 
 class _Item extends StatelessWidget {
@@ -286,10 +300,10 @@ class _Item extends StatelessWidget {
   Widget build(BuildContext context) {
     final hint = this.hint;
     return ListTile(
-      leading: Icon(icon, color: color ?? Theme.of(context).colorScheme.primary),
-      title: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: color)),
+      leading: IconTile(icon: icon, color: color ?? AppColors.primaryDeep),
+      title: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
       subtitle: hint == null ? null : Text(hint),
-      trailing: showChevron ? const Icon(Icons.chevron_right) : null,
+      trailing: showChevron ? const Icon(Icons.chevron_right_rounded, color: AppColors.muted) : null,
       onTap: onTap,
     );
   }

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 import '../../../core/constants/app_constants.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/router/start_route.dart';
+import '../../notifications/data/push_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../worker/data/worker_repository.dart';
 import '../data/auth_repository.dart';
@@ -99,8 +100,12 @@ class AuthActions {
     _forgetCodeRequest(); // any reset is done
   }
 
-  Future<void> signOut() {
+  Future<void> signOut() async {
     _forgetCodeRequest();
+    // This phone stops getting the user's push notifications; the next user
+    // to log in registers it again.
+    await _ref.read(pushRepositoryProvider).unregister();
+    _ref.invalidate(pushRegistrationProvider);
     return _repo.signOut();
   }
 

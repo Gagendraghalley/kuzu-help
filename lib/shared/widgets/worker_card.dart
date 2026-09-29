@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/strings/app_strings.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/price_utils.dart';
 import '../models/worker_listing.dart';
 import 'avatar_image.dart';
 import 'verified_badge.dart';
@@ -18,10 +19,9 @@ class WorkerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final priceNote = this.priceNote;
+    final priceNote = PriceUtils.display(this.priceNote);
 
     return Card(
-      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -30,16 +30,43 @@ class WorkerCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AvatarImage(url: worker.avatarUrl, name: worker.fullName, size: 64),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       worker.fullName,
-                      style: text.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 17, color: muted),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(worker.location, style: TextStyle(color: muted, fontSize: 14.5)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded, size: 19, color: AppColors.saffron),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            worker.reviewCount == 0
+                                ? '${AppStrings.noReviewsShort} · ${AppStrings.years(worker.yearsExperience)}'
+                                : '${worker.avgRating.toStringAsFixed(1)} '
+                                    '(${AppStrings.reviewCount(worker.reviewCount)}) · '
+                                    '${AppStrings.years(worker.yearsExperience)}',
+                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: AppColors.inkSoft),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -49,41 +76,28 @@ class WorkerCard extends StatelessWidget {
                         AvailabilityLabel(isAvailable: worker.isAvailable),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined, size: 18, color: muted),
-                        const SizedBox(width: 4),
-                        Expanded(child: Text(worker.location, style: TextStyle(color: muted))),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded, size: 20, color: AppColors.saffron),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            worker.reviewCount == 0
-                                ? '${AppStrings.noReviewsShort} · ${AppStrings.years(worker.yearsExperience)}'
-                                : '${worker.avgRating.toStringAsFixed(1)} '
-                                    '(${AppStrings.reviewCount(worker.reviewCount)}) · '
-                                    '${AppStrings.years(worker.yearsExperience)}',
-                          ),
-                        ),
-                      ],
-                    ),
                     if (priceNote != null && priceNote.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        priceNote,
-                        style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w600),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.peach,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          priceNote,
+                          style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w700, fontSize: 14.5),
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: muted),
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Icon(Icons.chevron_right_rounded, color: muted),
+              ),
             ],
           ),
         ),

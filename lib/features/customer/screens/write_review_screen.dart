@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/strings/app_strings.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/text_utils.dart';
 import '../../../shared/models/review.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/avatar_image.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/star_rating.dart';
 import '../data/review_repository.dart';
@@ -103,42 +105,54 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
       padding: const EdgeInsets.all(24),
       children: [
         if (worker != null) ...[
-          Row(
-            children: [
-              AvatarImage(url: worker.avatarUrl, name: worker.fullName, size: 48),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(worker.fullName, style: text.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  AvatarImage(url: worker.avatarUrl, name: worker.fullName, size: 52),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(worker.fullName, style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
         ],
-        Text(
-          AppStrings.howWasTheWork,
-          textAlign: TextAlign.center,
-          style: text.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Center(
-          child: StarRating(
-            rating: _rating.toDouble(),
-            size: 44,
-            onChanged: (stars) => setState(() {
-              _rating = stars;
-              _error = null;
-            }),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 24, 12, 16),
+            child: Column(
+              children: [
+                Text(
+                  AppStrings.howWasTheWork,
+                  textAlign: TextAlign.center,
+                  style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                StarRating(
+                  rating: _rating.toDouble(),
+                  size: 44,
+                  onChanged: (stars) => setState(() {
+                    _rating = stars;
+                    _error = null;
+                  }),
+                ),
+                SizedBox(
+                  height: 28,
+                  child: Text(
+                    AppStrings.ratingWord(_rating),
+                    textAlign: TextAlign.center,
+                    style: text.titleMedium?.copyWith(color: AppColors.primaryDeep),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        SizedBox(
-          height: 28,
-          child: Text(
-            AppStrings.ratingWord(_rating),
-            textAlign: TextAlign.center,
-            style: text.titleMedium?.copyWith(color: Theme.of(context).colorScheme.primary),
-          ),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         TextField(
           controller: _comment,
           minLines: 4,
@@ -153,10 +167,7 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
         ),
         if (_error != null) ...[
           const SizedBox(height: 8),
-          Semantics(
-            liveRegion: true,
-            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ),
+          FormError(_error!),
         ],
         const SizedBox(height: 24),
         PrimaryButton(

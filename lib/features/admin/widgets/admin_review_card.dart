@@ -6,6 +6,7 @@ import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../shared/models/worker_listing.dart';
+import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../customer/providers/search_providers.dart';
 import '../../customer/providers/worker_details_providers.dart';
@@ -91,24 +92,33 @@ class _AdminReviewCardState extends ConsumerState<AdminReviewCard> {
     final documents = ref.watch(workerDocumentsProvider(worker.id));
 
     return Card(
-      color: AppColors.ivory,
+      color: const Color(0xFFFFF8F1),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.35)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SectionHeader(AppStrings.adminCheck),
-            const SizedBox(height: 6),
-            Text(switch (status) {
-              _ when !worker.isActive => AppStrings.deactivatedWorkerHint,
-              VerificationStatus.approved => AppStrings.adminApprovedHint,
-              VerificationStatus.rejected => AppStrings.adminRejectedHint,
-              _ => AppStrings.adminPendingHint,
-            }),
+            const Row(
+              children: [
+                IconTile(icon: Icons.admin_panel_settings_outlined, size: 36),
+                SizedBox(width: 12),
+                Expanded(child: SectionHeader(AppStrings.adminCheck)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              switch (status) {
+                _ when !worker.isActive => AppStrings.deactivatedWorkerHint,
+                VerificationStatus.approved => AppStrings.adminApprovedHint,
+                VerificationStatus.rejected => AppStrings.adminRejectedHint,
+                _ => AppStrings.adminPendingHint,
+              },
+              style: const TextStyle(color: AppColors.inkSoft),
+            ),
             const SizedBox(height: 16),
             documents.when(
               loading: () => const SizedBox(height: 96, child: Center(child: CircularProgressIndicator())),
@@ -215,17 +225,23 @@ class _DocumentThumb extends StatelessWidget {
               ),
             ),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 120,
-              height: 80,
-              child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => broken()),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.line, width: 2),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 120,
+                height: 80,
+                child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => broken()),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(label, style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 6),
+        Text(label, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.inkSoft)),
       ],
     );
   }

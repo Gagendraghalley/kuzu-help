@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../shared/models/verification.dart';
 import '../../../shared/widgets/async_view.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/info_note.dart';
 import '../../../shared/widgets/photo_picker.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -139,10 +140,7 @@ class _VerificationFormState extends ConsumerState<_VerificationForm> {
         ),
         if (_error != null) ...[
           const SizedBox(height: 8),
-          Semantics(
-            liveRegion: true,
-            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ),
+          FormError(_error!),
         ],
         const SizedBox(height: 24),
         PrimaryButton(
@@ -186,7 +184,12 @@ class _DocumentTile extends StatelessWidget {
             : AppStrings.tapToAddPhoto;
 
     return Card(
-      clipBehavior: Clip.antiAlias,
+      shape: done
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: AppColors.verified.withValues(alpha: 0.35)),
+            )
+          : null,
       child: InkWell(
         onTap: () async {
           final photo = await pickPhoto(context);
@@ -197,14 +200,14 @@ class _DocumentTile extends StatelessWidget {
           child: Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 child: SizedBox.square(
                   dimension: 72,
                   child: picked != null
                       ? Image.memory(picked, fit: BoxFit.cover)
                       : ColoredBox(
-                          color: AppColors.ivory,
-                          child: Icon(icon, size: 36, color: AppColors.primaryDeep),
+                          color: AppColors.peach,
+                          child: Icon(icon, size: 34, color: AppColors.primaryDeep),
                         ),
                 ),
               ),
@@ -215,20 +218,27 @@ class _DocumentTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     if (hint != null) ...[
                       const SizedBox(height: 2),
-                      Text(hint, style: TextStyle(color: muted)),
+                      Text(hint, style: TextStyle(color: muted, fontSize: 14.5)),
                     ],
                     const SizedBox(height: 4),
-                    Text(status, style: TextStyle(color: done ? AppColors.verified : muted)),
+                    Text(
+                      status,
+                      style: TextStyle(
+                        color: done ? AppColors.verified : AppColors.primaryDeep,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.5,
+                      ),
+                    ),
                   ],
                 ),
               ),
               Icon(
-                done ? Icons.check_circle : Icons.add_a_photo_outlined,
-                color: done ? AppColors.verified : Theme.of(context).colorScheme.primary,
+                done ? Icons.check_circle_rounded : Icons.add_a_photo_outlined,
+                color: done ? AppColors.verified : AppColors.primaryDeep,
               ),
             ],
           ),

@@ -9,6 +9,7 @@ import '../../../core/utils/text_utils.dart';
 import '../../../shared/models/service_category.dart';
 import '../../../shared/models/worker_service.dart';
 import '../../../shared/widgets/async_view.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../customer/providers/search_providers.dart';
 import '../../customer/providers/worker_details_providers.dart';
@@ -135,10 +136,7 @@ class _ServicesFormState extends ConsumerState<_ServicesForm> {
           const SizedBox(height: 12),
         ],
         if (_error != null) ...[
-          Semantics(
-            liveRegion: true,
-            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ),
+          FormError(_error!),
           const SizedBox(height: 8),
         ],
         const SizedBox(height: 12),

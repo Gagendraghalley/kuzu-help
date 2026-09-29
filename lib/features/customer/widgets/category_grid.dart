@@ -47,20 +47,19 @@ class _CategoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => onTap(category),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+          padding: const EdgeInsets.fromLTRB(12, 22, 12, 18),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CategoryIcon(name: category.icon, size: 64),
-              const SizedBox(height: 12),
+              CategoryIcon(name: category.icon, size: 60),
+              const SizedBox(height: 14),
               Text(
                 category.name,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               // The Dzongkha name, once an admin has filled in service_categories.name_dz.
               if (category.nameDz case final dz? when dz.trim().isNotEmpty) ...[
@@ -68,7 +67,7 @@ class _CategoryTile extends StatelessWidget {
                 Text(
                   dz,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14.5),
                 ),
               ],
             ],

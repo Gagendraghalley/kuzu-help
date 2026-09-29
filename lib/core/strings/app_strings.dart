@@ -449,6 +449,8 @@ class AppStrings {
   static const noNotifications = "Nothing yet. We'll let you know here when something happens.";
 
   /// Worded here from the type and data the database saves, so they can be translated.
+  /// Push notifications use the same words from supabase/functions/send-push/index.ts:
+  /// change both.
   static String notificationTitle(String type, Map<String, dynamic> data) {
     String text(String key, String fallback) {
       final value = (data[key] as String?)?.trim() ?? '';

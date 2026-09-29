@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
-import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../shared/models/app_notification.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/empty_state.dart';
-import '../../admin/providers/admin_providers.dart';
-import '../../customer/providers/worker_details_providers.dart';
-import '../../jobs/providers/job_providers.dart';
+import '../../../shared/widgets/icon_tile.dart';
 import '../data/notification_repository.dart';
+import '../open_notification.dart';
 import '../providers/notification_providers.dart';
 
 /// Notifications
@@ -57,9 +54,9 @@ class NotificationsScreen extends ConsumerWidget {
           data: (notifications) => notifications.isEmpty
               ? const EmptyState(icon: Icons.notifications_none, message: AppStrings.noNotifications)
               : ListView.separated(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: notifications.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) => _NotificationTile(notification: notifications[i]),
                 ),
         ),
@@ -95,43 +92,6 @@ class _NotificationTile extends ConsumerWidget {
         _ => Icons.notifications_none,
       };
 
-  /// Marks it read (the list updates itself once saved; if saving fails it
-  /// stays unread, and tapping again retries), then opens what it's about.
-  void _open(BuildContext context, WidgetRef ref) {
-    final n = notification;
-    if (!n.isRead) ref.read(notificationRepositoryProvider).markRead(n.id).ignore();
-
-    final workerId = n.workerId;
-    switch (n.type) {
-      case NotificationTypes.newUser:
-        context.push(Routes.users);
-      case NotificationTypes.reportNew:
-        ref.invalidate(reportsProvider);
-        context.push(Routes.reports);
-      // The worker's page: the Admin check card for admins, reviews for the
-      // worker. Reloaded, as it may have changed since it was last opened.
-      case NotificationTypes.jobNew ||
-            NotificationTypes.jobAccepted ||
-            NotificationTypes.jobDeclined ||
-            NotificationTypes.jobCancelled ||
-            NotificationTypes.jobCompleted:
-        ref.invalidate(myJobsProvider);
-        context.push(Routes.jobs);
-      case NotificationTypes.workerSubmitted ||
-            NotificationTypes.workerResubmitted ||
-            NotificationTypes.reviewNew ||
-            NotificationTypes.reviewUpdated ||
-            NotificationTypes.reviewReply
-          when workerId != null:
-        ref.invalidate(workerDetailsProvider(workerId));
-        ref.invalidate(workerReviewsProvider(workerId));
-        context.push(Routes.workerDetailsFor(workerId));
-      // The splash (A1) opens the dashboard or the status screen with the note.
-      case NotificationTypes.workerApproved || NotificationTypes.workerRejected:
-        context.go(Routes.splash);
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final n = notification;
@@ -139,24 +99,29 @@ class _NotificationTile extends ConsumerWidget {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return Card(
-      color: n.isRead ? null : AppColors.ivory,
-      clipBehavior: Clip.antiAlias,
+      color: n.isRead ? null : const Color(0xFFFFF8F1),
+      shape: n.isRead
+          ? null
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.28)),
+            ),
       child: ListTile(
-        contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-        leading: CircleAvatar(
-          backgroundColor: n.isRead ? AppColors.ivory : Colors.white,
-          child: Icon(_icon(n.type), color: AppColors.primaryDeep),
-        ),
+        contentPadding: const EdgeInsets.fromLTRB(16, 8, 14, 8),
+        leading: IconTile(icon: _icon(n.type), size: 44, color: n.isRead ? AppColors.muted : AppColors.primaryDeep),
         title: Text(
           AppStrings.notificationTitle(n.type, n.data),
-          style: TextStyle(fontWeight: n.isRead ? FontWeight.w500 : FontWeight.bold),
+          style: TextStyle(fontWeight: n.isRead ? FontWeight.w600 : FontWeight.w800),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (body.isNotEmpty) Text(body),
-            const SizedBox(height: 4),
-            Text(AppStrings.timeAgo(n.createdAt), style: TextStyle(color: muted, fontSize: 13)),
+            if (body.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(body, style: const TextStyle(color: AppColors.inkSoft)),
+            ],
+            const SizedBox(height: 6),
+            Text(AppStrings.timeAgo(n.createdAt), style: TextStyle(color: muted, fontSize: 13, fontWeight: FontWeight.w500)),
           ],
         ),
         trailing: n.isRead
@@ -164,9 +129,13 @@ class _NotificationTile extends ConsumerWidget {
             : Container(
                 width: 10,
                 height: 10,
-                decoration: const BoxDecoration(color: AppColors.primaryDeep, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.4), blurRadius: 6)],
+                ),
               ),
-        onTap: () => _open(context, ref),
+        onTap: () => openNotification(context, ref, n),
       ),
     );
   }

@@ -71,7 +71,10 @@ class _WorkPhotosScreenState extends ConsumerState<WorkPhotosScreen> {
       floatingActionButton: photos.hasValue
           ? FloatingActionButton.extended(
               icon: _busy
-                  ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
                   : const Icon(Icons.add_a_photo_outlined),
               label: const Text(AppStrings.addPhoto),
               onPressed: _busy || full ? null : _add,
@@ -96,8 +99,8 @@ class _WorkPhotosScreenState extends ConsumerState<WorkPhotosScreen> {
               else
                 GridView.count(
                   crossAxisCount: 3,
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
@@ -109,13 +112,16 @@ class _WorkPhotosScreenState extends ConsumerState<WorkPhotosScreen> {
                             builder: (context, box) => PhotoThumb(url: photo.url, size: box.maxWidth),
                           ),
                           Positioned(
-                            top: 4,
-                            right: 4,
+                            top: 6,
+                            right: 6,
                             child: IconButton.filled(
-                              style: IconButton.styleFrom(backgroundColor: Colors.black54),
-                              iconSize: 20,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.black.withValues(alpha: 0.55),
+                                minimumSize: const Size.square(36),
+                              ),
+                              iconSize: 19,
                               tooltip: AppStrings.remove,
-                              icon: const Icon(Icons.delete_outline, color: Colors.white),
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
                               onPressed: _busy ? null : () => _remove(photo),
                             ),
                           ),

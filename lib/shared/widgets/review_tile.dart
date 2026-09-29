@@ -24,7 +24,7 @@ class ReviewTile extends StatelessWidget {
     final onReply = this.onReply;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -36,23 +36,37 @@ class ReviewTile extends StatelessWidget {
             ],
           ),
           if (comment != null && comment.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(comment, style: text.bodyLarge),
+            const SizedBox(height: 8),
+            Text(comment, style: text.bodyLarge?.copyWith(color: AppColors.inkSoft)),
           ],
           if (reply != null && reply.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            // A quote under the review, marked by a bar in the brand colour.
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppColors.ivory, borderRadius: BorderRadius.circular(12)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(AppStrings.replyFromWorker,
-                      style: text.labelLarge?.copyWith(color: AppColors.primaryDeep)),
-                  const SizedBox(height: 4),
-                  Text(reply),
-                ],
+              decoration: BoxDecoration(color: AppColors.canvas, borderRadius: BorderRadius.circular(14)),
+              clipBehavior: Clip.antiAlias,
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(width: 4, color: AppColors.primary),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(AppStrings.replyFromWorker,
+                                style: text.labelLarge?.copyWith(color: AppColors.primaryDeep, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 4),
+                            Text(reply, style: const TextStyle(color: AppColors.inkSoft)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -60,7 +74,7 @@ class ReviewTile extends StatelessWidget {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
-                icon: const Icon(Icons.reply),
+                icon: const Icon(Icons.reply_rounded),
                 label: Text(reply == null ? AppStrings.reply : AppStrings.editReply),
                 onPressed: onReply,
               ),

@@ -8,9 +8,11 @@ import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/email_utils.dart';
 import '../../../core/utils/error_messages.dart';
-import '../../../shared/widgets/app_bar_logo.dart';
+import '../../../shared/widgets/form_error.dart';
+import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../providers/auth_providers.dart';
+import '../widgets/auth_scaffold.dart';
 import '../widgets/password_field.dart';
 
 /// A3 Login
@@ -114,102 +116,105 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final role = ref.watch(chosenRoleProvider);
     final isSignUp = role != null;
-    final text = Theme.of(context).textTheme;
 
-    return Scaffold(
-      appBar: AppBar(title: const AppBarLogo()),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: AutofillGroup(
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                Text(
-                  isSignUp ? AppStrings.signUpTitle : AppStrings.logInTitle,
-                  style: text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                if (role != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    AppStrings.signingUpAs(role),
-                    style: text.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Text(isSignUp ? AppStrings.codeByEmail : AppStrings.logInHint, style: text.bodyLarge),
-                const SizedBox(height: 24),
-                if (isSignUp) ...[
-                  TextFormField(
-                    controller: _name,
-                    decoration: const InputDecoration(labelText: AppStrings.name),
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.name],
-                    validator: (v) => (v ?? '').trim().length < 2 ? AppStrings.enterName : null,
-                  ),
-                  const SizedBox(height: 16),
-                ],
+    return AuthScaffold(
+      // Signing up, the badge shows how they'll use the app; logging in, the logo.
+      icon: switch (role) {
+        null => null,
+        UserRole.worker => Icons.handyman_outlined,
+        _ => Icons.search_rounded,
+      },
+      pill: role == null ? null : AppStrings.signingUpAs(role),
+      title: isSignUp ? AppStrings.signUpTitle : AppStrings.logInTitle,
+      subtitle: isSignUp ? AppStrings.codeByEmail : AppStrings.logInHint,
+      child: Form(
+        key: _formKey,
+        child: AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (isSignUp) ...[
                 TextFormField(
-                  key: _emailKey,
-                  controller: _email,
-                  decoration: const InputDecoration(labelText: AppStrings.email),
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: isSignUp ? TextInputAction.done : TextInputAction.next,
-                  autocorrect: false,
-                  autofillHints: const [AutofillHints.email],
-                  validator: (v) => EmailUtils.isValid(v ?? '') ? null : AppStrings.invalidEmail,
-                  onFieldSubmitted: isSignUp ? (_) => _sendCode() : null,
+                  controller: _name,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.name,
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.name],
+                  validator: (v) => (v ?? '').trim().length < 2 ? AppStrings.enterName : null,
                 ),
-                if (!isSignUp) ...[
-                  const SizedBox(height: 16),
-                  PasswordField(
-                    controller: _password,
-                    label: AppStrings.password,
-                    autofillHints: const [AutofillHints.password],
-                    textInputAction: TextInputAction.done,
-                    validator: (v) => (v ?? '').isEmpty ? AppStrings.enterPassword : null,
-                    onFieldSubmitted: (_) => _logIn(),
-                  ),
-                ],
-                if (_alreadyRegistered) ...[
-                  const SizedBox(height: 16),
-                  _AlreadyRegistered(
-                    signingUpAsWorker: role == UserRole.worker,
-                    onLogIn: () => _switchTo(role: null),
-                  ),
-                ],
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                PrimaryButton(
-                  label: isSignUp ? AppStrings.sendCode : AppStrings.logIn,
-                  isLoading: _busy && !_sendingReset,
-                  onPressed: isSignUp ? _sendCode : _logIn,
+                const SizedBox(height: 16),
+              ],
+              TextFormField(
+                key: _emailKey,
+                controller: _email,
+                decoration: const InputDecoration(
+                  labelText: AppStrings.email,
+                  prefixIcon: Icon(Icons.mail_outline_rounded),
                 ),
-                const SizedBox(height: 8),
-                if (isSignUp)
-                  TextButton(
-                    onPressed: _busy ? null : () => _switchTo(role: null),
-                    child: Text('${AppStrings.alreadyHaveAccount} ${AppStrings.logIn}'),
-                  )
-                else ...[
-                  TextButton(
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: isSignUp ? TextInputAction.done : TextInputAction.next,
+                autocorrect: false,
+                autofillHints: const [AutofillHints.email],
+                validator: (v) => EmailUtils.isValid(v ?? '') ? null : AppStrings.invalidEmail,
+                onFieldSubmitted: isSignUp ? (_) => _sendCode() : null,
+              ),
+              if (!isSignUp) ...[
+                const SizedBox(height: 16),
+                PasswordField(
+                  controller: _password,
+                  label: AppStrings.password,
+                  autofillHints: const [AutofillHints.password],
+                  textInputAction: TextInputAction.done,
+                  validator: (v) => (v ?? '').isEmpty ? AppStrings.enterPassword : null,
+                  onFieldSubmitted: (_) => _logIn(),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
                     onPressed: _busy ? null : _resetPassword,
                     child: Text(_sendingReset ? AppStrings.sendingCode : AppStrings.forgotPassword),
                   ),
-                  TextButton(
-                    onPressed: _busy ? null : _createAccount,
-                    child: const Text(AppStrings.newHereCreateAccount),
-                  ),
-                ],
+                ),
               ],
-            ),
+              if (_alreadyRegistered) ...[
+                const SizedBox(height: 16),
+                _AlreadyRegistered(
+                  signingUpAsWorker: role == UserRole.worker,
+                  onLogIn: () => _switchTo(role: null),
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                FormError(_error!),
+              ],
+              SizedBox(height: isSignUp ? 28 : 16),
+              PrimaryButton(
+                label: isSignUp ? AppStrings.sendCode : AppStrings.logIn,
+                isLoading: _busy && !_sendingReset,
+                onPressed: isSignUp ? _sendCode : _logIn,
+              ),
+              const SizedBox(height: 16),
+              // The other way in, at the foot of the form.
+              if (isSignUp)
+                TextButton(
+                  onPressed: _busy ? null : () => _switchTo(role: null),
+                  child: Text.rich(TextSpan(children: [
+                    TextSpan(
+                      text: '${AppStrings.alreadyHaveAccount} ',
+                      style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w500),
+                    ),
+                    const TextSpan(text: AppStrings.logIn),
+                  ])),
+                )
+              else
+                TextButton(
+                  onPressed: _busy ? null : _createAccount,
+                  child: const Text(AppStrings.newHereCreateAccount, textAlign: TextAlign.center),
+                ),
+            ],
           ),
         ),
       ),
@@ -232,34 +237,34 @@ class _AlreadyRegistered extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.ivory,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+          color: const Color(0xFFFFF8F1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                const Icon(Icons.info_outline, color: AppColors.primaryDeep),
-                const SizedBox(width: 8),
+                const IconTile(icon: Icons.info_outline_rounded, size: 36),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     AppStrings.alreadyRegisteredTitle,
-                    style: text.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Text(AppStrings.alreadyRegisteredHelp),
+            const SizedBox(height: 10),
+            const Text(AppStrings.alreadyRegisteredHelp, style: TextStyle(color: AppColors.inkSoft)),
             if (signingUpAsWorker) ...[
               const SizedBox(height: 8),
-              const Text(AppStrings.alreadyRegisteredWorkerTip),
+              const Text(AppStrings.alreadyRegisteredWorkerTip, style: TextStyle(color: AppColors.inkSoft)),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             OutlinedButton(
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
               onPressed: onLogIn,
               child: const Text(AppStrings.logInInstead),
             ),

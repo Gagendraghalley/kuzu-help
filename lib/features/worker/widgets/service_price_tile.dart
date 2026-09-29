@@ -23,24 +23,24 @@ class ServicePriceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: BorderSide(color: selected ? colors.primary : colors.outlineVariant, width: selected ? 2 : 1),
+      borderRadius: BorderRadius.circular(20),
+      side: BorderSide(color: selected ? colors.primary : colors.outlineVariant, width: selected ? 1.8 : 1),
     );
 
     return Card(
       shape: shape,
-      clipBehavior: Clip.antiAlias,
+      color: selected ? const Color(0xFFFFFBF7) : Colors.white,
       child: Column(
         children: [
           CheckboxListTile(
             value: selected,
             onChanged: (value) => onSelected(value ?? false),
-            secondary: CategoryIcon(name: category.icon, size: 44),
+            secondary: CategoryIcon(name: category.icon, size: 48),
             title: Text(
               category.name,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           ),
           if (selected)
             Padding(

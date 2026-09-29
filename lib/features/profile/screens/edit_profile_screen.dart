@@ -10,6 +10,7 @@ import '../../../shared/models/profile.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/avatar_picker.dart';
 import '../../../shared/widgets/dzongkhag_field.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../data/profile_repository.dart';
 import '../providers/profile_providers.dart';
@@ -137,10 +138,7 @@ class _EditProfileFormState extends ConsumerState<_EditProfileForm> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),
-            Semantics(
-              liveRegion: true,
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
+            FormError(_error!),
           ],
           const SizedBox(height: 24),
           PrimaryButton(label: AppStrings.save, isLoading: _saving, onPressed: _save),

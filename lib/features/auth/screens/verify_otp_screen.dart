@@ -6,9 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/error_messages.dart';
-import '../../../shared/widgets/app_bar_logo.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../providers/auth_providers.dart';
+import '../widgets/auth_scaffold.dart';
 import '../widgets/code_boxes.dart';
 
 /// A4 Verify code
@@ -90,50 +91,40 @@ class _VerifyOtpScreenState extends ConsumerState<VerifyOtpScreen> {
   @override
   Widget build(BuildContext context) {
     final email = ref.watch(otpRequestProvider)?.email ?? '';
-    final text = Theme.of(context).textTheme;
 
-    return Scaffold(
-      appBar: AppBar(title: const AppBarLogo()),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text(
-              AppStrings.verifyTitle,
-              style: text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(AppStrings.codeSentTo(email), style: text.bodyLarge),
-            const SizedBox(height: 24),
-            CodeBoxes(
-              controller: _code,
-              focusNode: _codeFocus,
-              length: AppConstants.otpLength,
-              semanticLabel: AppStrings.enterCode,
-              hasError: _error != null,
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
-              onCompleted: (_) => _verify(),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              Semantics(
-                liveRegion: true,
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ),
-            ],
-            const SizedBox(height: 24),
-            PrimaryButton(label: AppStrings.verify, isLoading: _verifying, onPressed: _verify),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _secondsLeft > 0 ? null : _resend,
-              child: Text(
-                _secondsLeft > 0 ? AppStrings.resendIn(_secondsLeft) : AppStrings.resendCode,
-              ),
-            ),
+    return AuthScaffold(
+      icon: Icons.mark_email_read_outlined,
+      title: AppStrings.verifyTitle,
+      subtitle: AppStrings.codeSentTo(email),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 8),
+          CodeBoxes(
+            controller: _code,
+            focusNode: _codeFocus,
+            length: AppConstants.otpLength,
+            semanticLabel: AppStrings.enterCode,
+            hasError: _error != null,
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            onCompleted: (_) => _verify(),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            FormError(_error!),
           ],
-        ),
+          const SizedBox(height: 28),
+          PrimaryButton(label: AppStrings.verify, isLoading: _verifying, onPressed: _verify),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: _secondsLeft > 0 ? null : _resend,
+            child: Text(
+              _secondsLeft > 0 ? AppStrings.resendIn(_secondsLeft) : AppStrings.resendCode,
+            ),
+          ),
+        ],
       ),
     );
   }

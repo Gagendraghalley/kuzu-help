@@ -15,6 +15,7 @@ import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/avatar_picker.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/dzongkhag_field.dart';
+import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../auth/widgets/logout_button.dart';
 import '../../customer/providers/worker_details_providers.dart';
@@ -220,10 +221,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Semantics(
-              liveRegion: true,
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
+            FormError(_error!),
           ],
           const SizedBox(height: 24),
           PrimaryButton(
