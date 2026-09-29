@@ -7,4 +7,8 @@ class StoragePaths {
   static String cid(String userId) => '$userId/cid.jpg';
 
   static String certificate(String userId) => '$userId/certificate.jpg';
+
+  static String workPhoto(String userId) => '$userId/work_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+  static String jobPhoto(String userId) => '$userId/job_${DateTime.now().millisecondsSinceEpoch}.jpg';
 }

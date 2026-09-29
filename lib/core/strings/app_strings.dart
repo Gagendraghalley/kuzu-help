@@ -215,6 +215,26 @@ class AppStrings {
   static const adminsCantBeDeactivated = "Admins can't be deactivated.";
   static const openWorkerPage = 'Open worker page';
 
+  // Admin: reports from customers (C5)
+  static const reports = 'Reports';
+  static String reportStatusLabel(String status) => switch (status) {
+        ReportStatus.reviewed => 'Reviewed',
+        ReportStatus.closed => 'Closed',
+        _ => 'Open',
+      };
+  static String noReports(String status) => 'No ${reportStatusLabel(status).toLowerCase()} reports.';
+  static String reportedBy(String name) => 'Reported by ${name.isEmpty ? 'a customer' : name}';
+  static const reportHandlingHint = "Check the worker's page, and deactivate them there if needed. "
+      'The customer who sent the report is told when you mark it reviewed or closed.';
+  static const markReviewed = 'Mark as reviewed';
+  static const closeReport = 'Close report';
+  static const reopenReport = 'Open again';
+  static String reportStatusChanged(String status) => switch (status) {
+        ReportStatus.reviewed => 'Marked as reviewed. The customer who sent it is told.',
+        ReportStatus.closed => 'Report closed. The customer who sent it is told.',
+        _ => 'The report is open again.',
+      };
+
   // Shown to a deactivated user
   static const deactivatedTitle = 'Your account is deactivated';
   static const deactivatedMessage = "You can't use Kuzu Help with this account. "
@@ -291,6 +311,105 @@ class AppStrings {
   static const sendReport = 'Send report';
   static const reportSent = 'Thank you. Our team will look into it.';
 
+  // Reviews only after getting in touch; workers' replies
+  static const reviewAfterContact =
+      'You can review this worker after you call, message or send them a job request.';
+  static const reply = 'Reply';
+  static const editReply = 'Edit reply';
+  static const replyTitle = 'Reply to this review';
+  static const replyHint = 'e.g. Thank you! Sorry I was late, the road was closed.';
+  static const replyNeeded = 'Please write your reply';
+  static const replyFromWorker = 'Reply from the worker';
+  static const replySaved = 'Your reply is saved. The customer is told.';
+
+  // Photos of past work
+  static const workPhotos = 'Photos of work';
+  static const yourWorkPhotos = 'Photos of your work';
+  static String workPhotosHint(int max) =>
+      'Show customers jobs you have finished. They see these on your page. Up to $max photos.';
+  static const noWorkPhotos = 'No photos yet. Add photos of jobs you have finished.';
+  static String workPhotosFull(int max) => 'You have $max photos. Remove one to add another.';
+  static const removePhotoTitle = 'Remove this photo?';
+  static const remove = 'Remove';
+  static const photoAdded = 'Photo added. Customers can see it now.';
+
+  // Search and saved workers
+  static const searchWorkers = 'Search workers by name';
+  static const typeToSearch = 'Type at least 2 letters of a name.';
+  static String noWorkersNamed(String name) => 'No workers called "$name" yet.';
+  static const availableNow = 'Available now';
+  static String noneAvailableNow(String service) =>
+      'No ${service.toLowerCase()}s are available right now. Turn off "$availableNow" to see everyone.';
+  static const savedWorkers = 'Saved workers';
+  static const saveWorker = 'Save worker';
+  static const unsaveWorker = 'Remove from saved workers';
+  static const workerSaved = 'Saved. Find them under Saved workers.';
+  static const workerUnsaved = 'Removed from saved workers.';
+  static const noSavedWorkers = "No saved workers yet. Tap the heart on a worker's page to save them.";
+
+  // Job requests
+  static const requestJob = 'Request a job';
+  static const myJobRequests = 'My job requests';
+  static const jobRequests = 'Job requests';
+  static String jobRequestIntro(String name) =>
+      "Tell $name what you need. They'll answer here, and can call you on your number.";
+  static const jobService = 'Service';
+  static const jobDescription = 'What needs doing?';
+  static const jobDescriptionHint = 'e.g. The kitchen tap drips and the pipe under the sink leaks.';
+  static const describeJob = 'Please describe the job';
+  static const jobWhen = 'When do you need it? (optional)';
+  static const jobWhenHint = 'e.g. Tomorrow morning, or any weekday';
+  static const jobAddress = 'Where is the job?';
+  static const jobAddressHint = 'e.g. Changzamtog, near the school';
+  static const enterAddress = 'Please say where the job is';
+  static const jobPhone = 'Your phone number';
+  static const jobPhoto = 'Photo of the job (optional)';
+  static const jobPhotoHint = "A photo helps the worker see what's needed.";
+  static const sendRequest = 'Send request';
+  static const jobRequestSent = "Request sent. We'll let you know when they answer.";
+  static const jobAlreadyOpen = 'You already have an open request with this worker.';
+  static const seeYourRequest = 'See your job request';
+  static const workerNotTakingWork = "This worker isn't taking new work right now.";
+  static String jobStatusLabel(String status) => switch (status) {
+        JobStatus.accepted => 'Accepted',
+        JobStatus.declined => 'Declined',
+        JobStatus.cancelled => 'Cancelled',
+        JobStatus.completed => 'Done',
+        _ => 'Waiting for answer',
+      };
+  static const activeJobs = 'Active';
+  static const pastJobs = 'Past';
+  static String noJobs({required bool active, required bool asWorker}) => active
+      ? asWorker
+          ? 'No job requests right now. New ones show here and under the bell.'
+          : 'No open requests. Find a worker and tap "$requestJob".'
+      : 'Nothing here yet.';
+  static String newJobRequests(int n) =>
+      n == 0 ? 'No new requests' : n == 1 ? '1 new request' : '$n new requests';
+  static String jobFrom(String name) => 'From ${name.isEmpty ? 'a customer' : name}';
+  static String jobTo(String name) => 'To ${name.isEmpty ? 'a worker' : name}';
+  static const jobWhenLabel = 'When';
+  static const jobWhereLabel = 'Where';
+  static const jobPhoneLabel = 'Phone';
+  static const messageFromWorker = 'Message from the worker';
+  static const acceptJob = 'Accept';
+  static const declineJob = 'Decline';
+  static const markDone = 'Mark as done';
+  static const cancelRequest = 'Cancel request';
+  static const acceptJobTitle = 'Accept this job?';
+  static const acceptJobHint = 'Message for the customer (optional), e.g. I can come at 9am.';
+  static const declineJobTitle = 'Decline this job?';
+  static const declineJobHint = 'Reason (optional), e.g. I am fully booked this week.';
+  static const cancelRequestTitle = 'Cancel this request?';
+  static const markDoneTitle = 'Mark this job as done?';
+  static const keepIt = 'Keep it';
+  static String jobStatusChanged(String status) => switch (status) {
+        JobStatus.accepted => 'Accepted. The customer is told.',
+        JobStatus.declined => 'Declined. The customer is told.',
+        JobStatus.cancelled => 'Request cancelled.',
+        _ => 'Marked as done.',
+      };
+
   // D1 Settings and edit profile
   static const settings = 'Settings';
   static const account = 'Account';
@@ -313,6 +432,16 @@ class AppStrings {
   static const continueLabel = 'Continue';
   static const emailCantChange = "Used to log in. It can't be changed here.";
   static const profileSaved = 'Your profile is saved';
+  static const deleteAccount = 'Delete account';
+  static const deleteAccountHint = 'Remove your account and details for good';
+  static const deleteAccountTitle = 'Delete your account?';
+  static const deleteAccountMessage =
+      'Your profile, photo, reviews and reports are deleted for good. If you offer services, '
+      "your worker profile and documents are deleted too. This can't be undone.";
+  static const deleteForGood = 'Delete for good';
+  static const accountDeleted = 'Your account is deleted.';
+  static const accountDeletionNotSetUp =
+      'Deleting accounts is not set up yet: deploy supabase/functions/delete-account in Supabase.';
 
   // Notifications (the bell on each home screen)
   static const notifications = 'Notifications';
@@ -342,6 +471,14 @@ class AppStrings {
       NotificationTypes.reportUpdated => 'Update on your report about ${text('worker_name', 'a worker')}',
       NotificationTypes.accountDeactivated => deactivatedTitle,
       NotificationTypes.accountReactivated => 'Your account is active again',
+      NotificationTypes.reviewReply => '${text('worker_name', 'The worker')} replied to your review',
+      NotificationTypes.jobNew => 'New job request from ${text('customer_name', 'a customer')}',
+      NotificationTypes.jobAccepted => '${text('worker_name', 'The worker')} accepted your job request',
+      NotificationTypes.jobDeclined => "${text('worker_name', 'The worker')} can't take your job",
+      NotificationTypes.jobCancelled => '${text('customer_name', 'The customer')} cancelled their job request',
+      NotificationTypes.jobCompleted => data['by'] == 'worker'
+          ? '${text('worker_name', 'The worker')} marked your job as done'
+          : '${text('customer_name', 'The customer')} marked the job as done',
       _ => appName,
     };
   }
@@ -369,6 +506,14 @@ class AppStrings {
         },
       NotificationTypes.accountDeactivated => note.isEmpty ? deactivatedMessage : note,
       NotificationTypes.accountReactivated => 'You can use Kuzu Help again.',
+      NotificationTypes.reviewReply => 'Tap to read it.',
+      NotificationTypes.jobNew => [
+          if (data['category'] case final String category) category,
+          'Tap to see the job and reply.',
+        ].join(' · '),
+      NotificationTypes.jobAccepted => note.isEmpty ? "They'll call you on the number you gave." : note,
+      NotificationTypes.jobDeclined => note.isEmpty ? 'Try another worker for this job.' : note,
+      NotificationTypes.jobCompleted => data['by'] == 'worker' ? 'How did it go? Leave a review.' : '',
       _ => '',
     };
   }

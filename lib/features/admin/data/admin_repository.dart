@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../../shared/models/profile.dart';
+import '../../../shared/models/report.dart';
 import '../../../shared/models/worker_listing.dart';
 
 /// A worker's CID photo and certificate (B3), as links that expire soon.
@@ -73,6 +74,23 @@ class AdminRepository {
       'active': active,
       'reason': reason,
     });
+  }
+
+  /// Reports with [status] (a ReportStatus value), newest first. Needs
+  /// supabase/updates.sql.
+  Future<List<Report>> getReports({required String status}) async {
+    final rows = await _db
+        .from('report_list')
+        .select()
+        .eq('status', status)
+        .order('created_at')
+        .limit(100);
+    return rows.map(Report.fromJson).toList();
+  }
+
+  /// The customer who sent the report is told. Needs supabase/updates.sql.
+  Future<void> setReportStatus(String reportId, String status) async {
+    await _db.rpc('set_report_status', params: {'report_id': reportId, 'new_status': status});
   }
 }
 

@@ -18,9 +18,9 @@ import '../providers/profile_providers.dart';
 
 /// D1 Settings
 /// Purpose: Account management for everyone; admins also reach their tools here.
-/// Backend: Updates profiles. Users can't delete their own account: admins
-/// deactivate accounts instead (Users).
-/// Done when: Logout returns to Welcome.
+/// Backend: Updates profiles. Customers and workers can delete their account
+/// (the delete-account Edge Function); admins can't.
+/// Done when: Logout, and deleting the account, return to Welcome.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -50,6 +50,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _logOut() async {
     final ok = await confirm(context, title: AppStrings.logoutConfirm, confirmLabel: AppStrings.logout);
     if (ok) await _run(() => ref.read(authActionsProvider).signOut());
+  }
+
+  /// Deletes everything, then logs out; the router moves on to Welcome.
+  Future<void> _deleteAccount() async {
+    final ok = await confirm(
+      context,
+      title: AppStrings.deleteAccountTitle,
+      message: AppStrings.deleteAccountMessage,
+      confirmLabel: AppStrings.deleteForGood,
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await _run(() async {
+      await ref.read(profileRepositoryProvider).deleteAccount();
+      await ref.read(authActionsProvider).signOut();
+      messenger.showSnackBar(const SnackBar(content: Text(AppStrings.accountDeleted)));
+    });
   }
 
   Future<void> _becomeWorker() async {
@@ -110,6 +128,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label: AppStrings.users,
                         onTap: () => context.push(Routes.users),
                       ),
+                      const Divider(indent: 16, endIndent: 16),
+                      _Item(
+                        icon: Icons.flag_outlined,
+                        label: AppStrings.reports,
+                        onTap: () => context.push(Routes.reports),
+                      ),
                     ],
                   ),
                 ),
@@ -144,6 +168,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       const Divider(indent: 16, endIndent: 16),
                       _Item(
+                        icon: Icons.photo_library_outlined,
+                        label: AppStrings.yourWorkPhotos,
+                        onTap: () => context.push(Routes.workPhotos),
+                      ),
+                      const Divider(indent: 16, endIndent: 16),
+                      _Item(
                         icon: Icons.search,
                         label: AppStrings.stopOfferingServices,
                         hint: AppStrings.stopOfferingServicesHint,
@@ -171,6 +201,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   showChevron: false,
                 ),
               ),
+              // Admins can't delete their account, as they can't be deactivated.
+              if (profile != null && profile.role != UserRole.admin) ...[
+                const SizedBox(height: 16),
+                Card(
+                  child: _Item(
+                    icon: Icons.delete_forever_outlined,
+                    label: AppStrings.deleteAccount,
+                    hint: AppStrings.deleteAccountHint,
+                    color: AppColors.error,
+                    onTap: _busy ? null : _deleteAccount,
+                    showChevron: false,
+                  ),
+                ),
+              ],
               if (_busy) ...[
                 const SizedBox(height: 24),
                 const Center(child: CircularProgressIndicator()),
@@ -225,6 +269,7 @@ class _Item extends StatelessWidget {
   final IconData icon;
   final String label;
   final String? hint;
+  final Color? color; // icon and label; the theme's primary colour when null
   final VoidCallback? onTap;
   final bool showChevron;
 
@@ -233,6 +278,7 @@ class _Item extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.hint,
+    this.color,
     this.showChevron = true,
   });
 
@@ -240,8 +286,8 @@ class _Item extends StatelessWidget {
   Widget build(BuildContext context) {
     final hint = this.hint;
     return ListTile(
-      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+      leading: Icon(icon, color: color ?? Theme.of(context).colorScheme.primary),
+      title: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: color)),
       subtitle: hint == null ? null : Text(hint),
       trailing: showChevron ? const Icon(Icons.chevron_right) : null,
       onTap: onTap,

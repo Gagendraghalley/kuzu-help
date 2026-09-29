@@ -62,6 +62,15 @@ class _CategoryTile extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
+              // The Dzongkha name, once an admin has filled in service_categories.name_dz.
+              if (category.nameDz case final dz? when dz.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  dz,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ],
             ],
           ),
         ),

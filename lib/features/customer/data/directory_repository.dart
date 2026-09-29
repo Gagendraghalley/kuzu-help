@@ -74,6 +74,22 @@ class DirectoryRepository {
     return [for (final worker in workers) (worker: worker, priceNote: priceNotes[worker.id])];
   }
 
+  /// C1 search: listed workers anywhere in Bhutan whose name contains
+  /// [query], best rated first.
+  Future<List<WorkerListing>> searchByName(String query) async {
+    // Characters with a meaning in the search pattern can't be searched for.
+    final term = query.replaceAll(RegExp(r'[,()*%\\]'), ' ').trim();
+    if (term.isEmpty) return [];
+    final rows = await _db
+        .from('worker_directory')
+        .select()
+        .ilike('full_name', '%$term%')
+        .order('avg_rating')
+        .order('review_count')
+        .limit(50);
+    return rows.map(WorkerListing.fromJson).toList();
+  }
+
   /// C3 (and B5 for the worker's own listing). Null when this user can't see
   /// the worker: customers only see approved ones.
   Future<WorkerDetails?> getWorker(String id) async {

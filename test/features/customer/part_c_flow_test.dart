@@ -134,7 +134,14 @@ void main() {
   });
 
   testWidgets('C4 a customer rates a worker, then can edit the review', (tester) async {
-    final fakes = await openHome(tester);
+    final fakes = await pumpApp(
+      tester,
+      loggedIn: true,
+      hasPassword: true,
+      directory: directory(),
+      reviews: FakeReviewRepository([pemasReview]),
+      contacted: {'pema'}, // only customers who got in touch can review
+    );
     await openPemasDetails(tester);
 
     await scrollAndTap(tester, find.text(AppStrings.writeReview));

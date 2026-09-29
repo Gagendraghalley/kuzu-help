@@ -5,17 +5,24 @@ import 'package:bhutan_services/app.dart';
 import 'package:bhutan_services/core/constants/app_constants.dart';
 import 'package:bhutan_services/features/admin/data/admin_repository.dart';
 import 'package:bhutan_services/features/auth/data/auth_repository.dart';
+import 'package:bhutan_services/features/customer/data/contact_repository.dart';
 import 'package:bhutan_services/features/customer/data/directory_repository.dart';
 import 'package:bhutan_services/features/customer/data/report_repository.dart';
 import 'package:bhutan_services/features/customer/data/review_repository.dart';
+import 'package:bhutan_services/features/customer/data/saved_workers_repository.dart';
+import 'package:bhutan_services/features/jobs/data/job_repository.dart';
 import 'package:bhutan_services/features/notifications/data/notification_repository.dart';
 import 'package:bhutan_services/features/profile/data/profile_repository.dart';
+import 'package:bhutan_services/features/worker/data/work_photo_repository.dart';
 import 'package:bhutan_services/features/worker/data/worker_repository.dart';
 import 'package:bhutan_services/shared/models/app_notification.dart';
+import 'package:bhutan_services/shared/models/job_request.dart';
 import 'package:bhutan_services/shared/models/profile.dart';
+import 'package:bhutan_services/shared/models/report.dart';
 import 'package:bhutan_services/shared/models/review.dart';
 import 'package:bhutan_services/shared/models/service_category.dart';
 import 'package:bhutan_services/shared/models/verification.dart';
+import 'package:bhutan_services/shared/models/work_photo.dart';
 import 'package:bhutan_services/shared/models/worker_listing.dart';
 import 'package:bhutan_services/shared/models/worker_profile.dart';
 import 'package:bhutan_services/shared/models/worker_progress.dart';
@@ -24,7 +31,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException;
 
 // The whole app with Supabase replaced by in-memory fakes.
 
@@ -106,9 +113,13 @@ class FakeProfileRepository implements ProfileRepository {
 
   Profile profile;
   Uint8List? lastPhoto;
+  bool deleted = false;
 
   @override
   Future<Profile?> getMyProfile() async => profile;
+
+  @override
+  Future<void> deleteAccount() async => deleted = true;
 
   @override
   Future<void> updateProfile({
@@ -251,6 +262,11 @@ class FakeDirectoryRepository implements DirectoryRepository {
   }
 
   @override
+  Future<List<WorkerListing>> searchByName(String query) async => workers
+      .where((w) => w.isApproved && w.fullName.toLowerCase().contains(query.trim().toLowerCase()))
+      .toList();
+
+  @override
   Future<WorkerDetails?> getWorker(String id) async {
     final worker = workers.where((w) => w.id == id).firstOrNull;
     return worker == null ? null : (worker: worker, services: services[id] ?? const []);
@@ -285,16 +301,57 @@ class FakeReviewRepository implements ReviewRepository {
       ),
     );
   }
+
+  final replies = <({String reviewId, String reply})>[];
+
+  @override
+  Future<void> replyToReview(String reviewId, String reply) async {
+    replies.add((reviewId: reviewId, reply: reply));
+    final i = reviews.indexWhere((r) => r.id == reviewId);
+    final r = reviews[i];
+    reviews[i] = Review(
+      id: r.id,
+      workerId: r.workerId,
+      customerId: r.customerId,
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.createdAt,
+      reply: reply,
+      repliedAt: DateTime(2026, 9, 29),
+    );
+  }
 }
 
 /// Approving or deactivating changes [directory] and [users], as the database would.
 class FakeAdminRepository implements AdminRepository {
-  FakeAdminRepository(this.directory, this.users);
+  FakeAdminRepository(this.directory, this.users, [List<Report>? reports]) : reports = reports ?? [];
 
   final FakeDirectoryRepository directory;
   final List<Profile> users;
+  final List<Report> reports;
   final decisions = <({String workerId, String status, String? note})>[];
   final activations = <({String userId, bool active, String? reason})>[];
+
+  @override
+  Future<List<Report>> getReports({required String status}) async =>
+      reports.where((r) => r.status == status).toList();
+
+  @override
+  Future<void> setReportStatus(String reportId, String status) async {
+    final i = reports.indexWhere((r) => r.id == reportId);
+    final r = reports[i];
+    reports[i] = Report(
+      id: r.id,
+      workerId: r.workerId,
+      workerName: r.workerName,
+      reporterName: r.reporterName,
+      reporterEmail: r.reporterEmail,
+      reason: r.reason,
+      details: r.details,
+      status: status,
+      createdAt: r.createdAt,
+    );
+  }
 
   @override
   Future<List<WorkerListing>> getPendingWorkers() async =>
@@ -371,7 +428,6 @@ class FakeNotificationRepository implements NotificationRepository {
       : notifications = notifications ?? [];
 
   final List<AppNotification> notifications;
-  final contacts = <({String workerId, String method})>[];
   final _changes = StreamController<List<AppNotification>>.broadcast();
 
   void arrive(AppNotification notification) {
@@ -397,10 +453,119 @@ class FakeNotificationRepository implements NotificationRepository {
     }
     _changes.add([...notifications]);
   }
+}
+
+/// [contacted]: workers the customer has been in touch with, so may review.
+class FakeContactRepository implements ContactRepository {
+  FakeContactRepository(this.contacted);
+
+  final Set<String> contacted;
+  final recorded = <({String workerId, String method})>[];
 
   @override
-  Future<void> notifyContact(String workerId, String method) async =>
-      contacts.add((workerId: workerId, method: method));
+  Future<void> recordContact(String workerId, String method) async {
+    recorded.add((workerId: workerId, method: method));
+    contacted.add(workerId);
+  }
+
+  @override
+  Future<bool> hasContacted(String workerId) async => contacted.contains(workerId);
+}
+
+/// [saved] holds worker IDs, most recently saved first.
+class FakeSavedWorkersRepository implements SavedWorkersRepository {
+  FakeSavedWorkersRepository(this.directory, this.saved);
+
+  final FakeDirectoryRepository directory;
+  final List<String> saved;
+
+  @override
+  Future<List<WorkerListing>> getSavedWorkers() async => [
+        for (final id in saved)
+          ...directory.workers.where((w) => w.id == id && w.isApproved && w.isActive),
+      ];
+
+  @override
+  Future<bool> isSaved(String workerId) async => saved.contains(workerId);
+
+  @override
+  Future<void> setSaved(String workerId, {required bool saved}) async {
+    this.saved.remove(workerId);
+    if (saved) this.saved.insert(0, workerId);
+  }
+}
+
+/// Photos by worker ID. Adding needs the phone's camera, so tests don't.
+class FakeWorkPhotoRepository implements WorkPhotoRepository {
+  FakeWorkPhotoRepository(this.photos);
+
+  final Map<String, List<WorkPhoto>> photos;
+
+  @override
+  Future<List<WorkPhoto>> getPhotos(String workerId) async => [...?photos[workerId]];
+
+  @override
+  Future<void> addPhoto(Uint8List photo) async {
+    final mine = photos.putIfAbsent(me, () => []);
+    mine.insert(0, WorkPhoto(id: 'photo-${mine.length + 1}', workerId: me, path: '$me/new.jpg', url: ''));
+  }
+
+  @override
+  Future<void> deletePhoto(WorkPhoto photo) async => photos[photo.workerId]?.remove(photo);
+}
+
+/// Like the database: one open request per customer and worker, and only
+/// allowed status changes. [me] is the customer or the worker.
+class FakeJobRepository implements JobRepository {
+  FakeJobRepository(this.jobs);
+
+  final List<JobRequest> jobs;
+  final photosSent = <Uint8List>[];
+
+  @override
+  Future<List<JobRequest>> getMyJobs({required bool asWorker}) async =>
+      jobs.where((j) => (asWorker ? j.workerId : j.customerId) == me).toList();
+
+  @override
+  Future<void> sendRequest({
+    required String workerId,
+    String? categoryId,
+    required String description,
+    String? whenNeeded,
+    required String address,
+    required String contactPhone,
+    Uint8List? photo,
+  }) async {
+    if (jobs.any((j) => j.customerId == me && j.workerId == workerId && j.isOpen)) {
+      throw const PostgrestException(message: 'duplicate key value', code: '23505');
+    }
+    if (photo != null) photosSent.add(photo);
+    jobs.insert(
+      0,
+      JobRequest(
+        id: 'job-${jobs.length + 1}',
+        customerId: me,
+        workerId: workerId,
+        customerName: 'Test',
+        description: description,
+        whenNeeded: whenNeeded,
+        address: address,
+        contactPhone: contactPhone,
+        status: JobStatus.pending,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  Future<void> setStatus(String requestId, String status, {String? note}) async {
+    final i = jobs.indexWhere((j) => j.id == requestId);
+    final accepting = status == JobStatus.accepted || status == JobStatus.declined;
+    jobs[i] = jobs[i].withStatus(status, note: accepting && (note ?? '').isNotEmpty ? note : null);
+  }
+
+  @override
+  Future<String> photoUrl(String path) async => 'https://example.com/$path';
 }
 
 // Test data.
@@ -467,6 +632,10 @@ class Fakes {
     required this.reports,
     required this.admin,
     required this.notifications,
+    required this.contacts,
+    required this.saved,
+    required this.workPhotos,
+    required this.jobs,
   });
 
   final FakeAuthRepository auth;
@@ -477,6 +646,10 @@ class Fakes {
   final FakeReportRepository reports;
   final FakeAdminRepository admin;
   final FakeNotificationRepository notifications;
+  final FakeContactRepository contacts;
+  final FakeSavedWorkersRepository saved;
+  final FakeWorkPhotoRepository workPhotos;
+  final FakeJobRepository jobs;
 }
 
 Future<Fakes> pumpApp(
@@ -492,6 +665,11 @@ Future<Fakes> pumpApp(
   String? deactivatedReason,
   List<Profile> users = const [], // what an admin sees under Users
   List<AppNotification> notifications = const [],
+  List<Report> reports = const [], // what an admin sees under Reports
+  Set<String> contacted = const {}, // workers the customer may review
+  List<String> saved = const [],
+  Map<String, List<WorkPhoto>> workPhotos = const {},
+  List<JobRequest> jobs = const [],
 }) async {
   // A phone-sized screen (iPhone 16).
   tester.view.physicalSize = const Size(1179, 2556);
@@ -514,8 +692,12 @@ Future<Fakes> pumpApp(
     directory: directory,
     reviews: reviews ?? FakeReviewRepository(),
     reports: FakeReportRepository(),
-    admin: FakeAdminRepository(directory, [...users]),
+    admin: FakeAdminRepository(directory, [...users], [...reports]),
     notifications: FakeNotificationRepository([...notifications]),
+    contacts: FakeContactRepository({...contacted}),
+    saved: FakeSavedWorkersRepository(directory, [...saved]),
+    workPhotos: FakeWorkPhotoRepository({for (final e in workPhotos.entries) e.key: [...e.value]}),
+    jobs: FakeJobRepository([...jobs]),
   );
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -527,6 +709,10 @@ Future<Fakes> pumpApp(
       reportRepositoryProvider.overrideWithValue(fakes.reports),
       adminRepositoryProvider.overrideWithValue(fakes.admin),
       notificationRepositoryProvider.overrideWithValue(fakes.notifications),
+      contactRepositoryProvider.overrideWithValue(fakes.contacts),
+      savedWorkersRepositoryProvider.overrideWithValue(fakes.saved),
+      workPhotoRepositoryProvider.overrideWithValue(fakes.workPhotos),
+      jobRepositoryProvider.overrideWithValue(fakes.jobs),
     ],
     child: const BhutanServicesApp(),
   ));

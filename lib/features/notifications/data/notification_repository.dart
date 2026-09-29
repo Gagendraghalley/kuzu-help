@@ -39,12 +39,6 @@ class NotificationRepository {
         .eq('user_id', _userId)
         .isFilter('read_at', null);
   }
-
-  /// C3: tells the worker a customer tapped Call or WhatsApp (a
-  /// ContactMethod value). The database skips repeats within a day.
-  Future<void> notifyContact(String workerId, String method) async {
-    await _db.rpc('record_contact', params: {'worker_id': workerId, 'method': method});
-  }
 }
 
 final notificationRepositoryProvider =

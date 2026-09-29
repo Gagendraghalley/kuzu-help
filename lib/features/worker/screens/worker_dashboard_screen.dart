@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../shared/models/worker_listing.dart';
 import '../../../shared/widgets/app_bar_logo.dart';
@@ -17,7 +18,9 @@ import '../../../shared/widgets/verified_badge.dart';
 import '../../../shared/widgets/worker_stats.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../customer/data/directory_repository.dart';
+import '../../customer/data/review_repository.dart';
 import '../../customer/providers/worker_details_providers.dart';
+import '../../jobs/providers/job_providers.dart';
 import '../../notifications/widgets/notifications_button.dart';
 import '../../profile/widgets/settings_button.dart';
 import '../data/worker_repository.dart';
@@ -25,7 +28,8 @@ import '../widgets/availability_switch.dart';
 
 /// B5 Worker dashboard
 /// Purpose: Home screen for approved workers.
-/// Backend: Updates is_available; reads reviews and rating from worker_directory.
+/// Backend: Updates is_available; reads reviews and rating from worker_directory,
+/// and job requests. Workers reply to reviews here.
 /// Done when: Turning availability off shows 'Not available' to customers.
 class WorkerDashboardScreen extends ConsumerWidget {
   const WorkerDashboardScreen({super.key});
@@ -55,6 +59,7 @@ class WorkerDashboardScreen extends ConsumerWidget {
                   onRefresh: () => Future.wait([
                     ref.refresh(workerDetailsProvider(myId).future),
                     ref.refresh(workerReviewsProvider(myId).future),
+                    ref.refresh(myJobsProvider.future),
                   ]),
                   child: _Dashboard(details: details),
                 ),
@@ -100,6 +105,8 @@ class _Dashboard extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _Availability(worker: worker),
+        const SizedBox(height: 12),
+        const _JobRequestsCard(),
         const SizedBox(height: 20),
         WorkerStats(worker: worker),
         const SizedBox(height: 28),
@@ -137,6 +144,13 @@ class _Dashboard extends ConsumerWidget {
               ),
               const Divider(indent: 16, endIndent: 16),
               ListTile(
+                leading: Icon(Icons.photo_library_outlined, color: Theme.of(context).colorScheme.primary),
+                title: const Text(AppStrings.yourWorkPhotos),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(Routes.workPhotos),
+              ),
+              const Divider(indent: 16, endIndent: 16),
+              ListTile(
                 leading: Icon(Icons.visibility_outlined, color: Theme.of(context).colorScheme.primary),
                 title: const Text(AppStrings.seePublicProfile),
                 trailing: const Icon(Icons.chevron_right),
@@ -170,12 +184,43 @@ class _Dashboard extends ConsumerWidget {
                   children: [
                     for (final (i, review) in reviews.take(WorkerDashboardScreen._recentReviews).indexed) ...[
                       if (i > 0) const Divider(),
-                      ReviewTile(review: review),
+                      ReviewTile(
+                        review: review,
+                        onReply: () async {
+                          final saved = await replyToReview(context, review,
+                              (reply) => ref.read(reviewRepositoryProvider).replyToReview(review.id, reply));
+                          if (saved) ref.invalidate(workerReviewsProvider(worker.id));
+                        },
+                      ),
                     ],
                   ],
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// Job requests from customers, with how many are waiting for an answer.
+class _JobRequestsCard extends ConsumerWidget {
+  const _JobRequestsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final waiting = ref.watch(newJobCountProvider);
+    return Card(
+      color: waiting > 0 ? AppColors.ivory : null,
+      child: ListTile(
+        leading: Badge(
+          isLabelVisible: waiting > 0,
+          label: Text('$waiting'),
+          child: const Icon(Icons.assignment_outlined, color: AppColors.primaryDeep),
+        ),
+        title: const Text(AppStrings.jobRequests, style: TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(AppStrings.newJobRequests(waiting)),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push(Routes.jobs),
+      ),
     );
   }
 }

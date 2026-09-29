@@ -179,7 +179,7 @@ void main() {
 
     await tapAndSettle(tester, AppStrings.call);
     await tapAndSettle(tester, AppStrings.whatsapp);
-    expect(fakes.notifications.contacts, [
+    expect(fakes.contacts.recorded, [
       (workerId: 'pema', method: ContactMethod.call),
       (workerId: 'pema', method: ContactMethod.whatsapp),
     ]);

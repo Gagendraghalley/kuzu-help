@@ -71,9 +71,11 @@ class WorkerListing {
   }
 
   /// profiles(*) rather than named columns, so this still works before
-  /// supabase/updates.sql adds is_active.
-  static const workerProfileColumns =
-      'id, bio, years_experience, whatsapp_number, is_available, verification_status, profiles(*)';
+  /// supabase/updates.sql adds is_active. The worker's own profile is named
+  /// (!worker_profiles_id_fkey): saved_workers and worker_contacts also link
+  /// workers to profiles, and the API refuses to guess (PGRST201).
+  static const workerProfileColumns = 'id, bio, years_experience, whatsapp_number, is_available, '
+      'verification_status, profiles:profiles!worker_profiles_id_fkey(*)';
 
   /// False for a [workerProfileColumns] row of someone who stopped offering
   /// services (supabase/updates.sql): their worker profile is kept but hidden.

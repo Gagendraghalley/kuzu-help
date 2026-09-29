@@ -38,6 +38,11 @@ void main() {
     expect(ErrorMessages.from(table), AppStrings.databaseUpdateNeeded);
   });
 
+  test('the delete-account Edge Function is not deployed', () {
+    expect(ErrorMessages.from(const FunctionException(status: 404)), AppStrings.accountDeletionNotSetUp);
+    expect(ErrorMessages.from(const FunctionException(status: 500)), AppStrings.genericError);
+  });
+
   test('anything else gets the general message', () {
     expect(ErrorMessages.from(Exception('Failed host lookup')), AppStrings.genericError);
     expect(ErrorMessages.from(const AuthException('Something odd')), AppStrings.genericError);

@@ -4,12 +4,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../shared/models/worker_listing.dart';
 import '../../../shared/models/worker_service.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/avatar_image.dart';
 import '../../../shared/widgets/category_icon.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/info_note.dart';
+import '../../../shared/widgets/photo_viewer.dart';
 import '../../../shared/widgets/review_tile.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/verified_badge.dart';
@@ -17,17 +21,23 @@ import '../../../shared/widgets/worker_stats.dart';
 import '../../admin/providers/admin_providers.dart';
 import '../../admin/widgets/admin_review_card.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../jobs/providers/job_providers.dart';
+import '../../worker/providers/worker_providers.dart';
 import '../data/directory_repository.dart';
+import '../data/review_repository.dart';
+import '../data/saved_workers_repository.dart';
 import '../providers/worker_details_providers.dart';
 import '../widgets/contact_buttons.dart';
 
 /// C3 Worker details
 /// Purpose: Give customers enough information to decide and make contact.
-/// Backend: Reads worker_directory, worker_services and reviews.
+/// Backend: Reads worker_directory, worker_services, work_photos and reviews.
 /// Done when: Call and WhatsApp buttons work on a real phone.
-/// Workers also open their own page from B5, without contact, review or report.
-/// Admins can open workers awaiting approval too (from C2 or Settings), and
-/// approve or reject them in the 'Admin check' card.
+/// Customers can also save the worker, send a job request, and review them
+/// once they've been in touch. Workers also open their own page from B5,
+/// without contact, review or report, and reply to reviews there. Admins can
+/// open workers awaiting approval too (from C2 or Settings), and approve or
+/// reject them in the 'Admin check' card.
 class WorkerDetailsScreen extends ConsumerWidget {
   final String workerId;
 
@@ -40,7 +50,9 @@ class WorkerDetailsScreen extends ConsumerWidget {
     final phone = details.valueOrNull?.worker.whatsappNumber;
 
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        actions: [if (!isMe && details.valueOrNull != null) _SaveButton(workerId: workerId)],
+      ),
       body: AsyncView(
         value: details,
         onRetry: () => ref.invalidate(workerDetailsProvider(workerId)),
@@ -66,6 +78,46 @@ class WorkerDetailsScreen extends ConsumerWidget {
   }
 }
 
+/// The heart: save the worker to call again.
+class _SaveButton extends ConsumerStatefulWidget {
+  final String workerId;
+
+  const _SaveButton({required this.workerId});
+
+  @override
+  ConsumerState<_SaveButton> createState() => _SaveButtonState();
+}
+
+class _SaveButtonState extends ConsumerState<_SaveButton> {
+  bool _saving = false;
+
+  Future<void> _toggle(bool saved) async {
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(savedWorkersRepositoryProvider).setSaved(widget.workerId, saved: !saved);
+      ref.invalidate(isSavedProvider(widget.workerId));
+      ref.invalidate(savedWorkersProvider);
+      messenger.showSnackBar(SnackBar(content: Text(saved ? AppStrings.workerUnsaved : AppStrings.workerSaved)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ErrorMessages.from(e))));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final saved = ref.watch(isSavedProvider(widget.workerId)).valueOrNull;
+    return IconButton(
+      tooltip: saved == true ? AppStrings.unsaveWorker : AppStrings.saveWorker,
+      icon: Icon(saved == true ? Icons.favorite : Icons.favorite_border,
+          color: saved == true ? AppColors.error : null),
+      onPressed: saved == null || _saving ? null : () => _toggle(saved),
+    );
+  }
+}
+
 class _Details extends ConsumerWidget {
   final WorkerDetails details;
   final bool isMe;
@@ -78,11 +130,13 @@ class _Details extends ConsumerWidget {
     final bio = worker.bio?.trim() ?? '';
     final text = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final listed = worker.isApproved && worker.isActive;
 
     return RefreshIndicator(
       onRefresh: () => Future.wait([
         ref.refresh(workerDetailsProvider(worker.id).future),
         ref.refresh(workerReviewsProvider(worker.id).future),
+        ref.refresh(workPhotosProvider(worker.id).future),
       ]),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -127,24 +181,25 @@ class _Details extends ConsumerWidget {
             const SizedBox(height: 12),
             const InfoNote(icon: Icons.schedule, text: AppStrings.notAvailableNow),
           ],
+          if (!isMe && listed) ...[
+            const SizedBox(height: 16),
+            _JobRequestButton(worker: worker),
+          ],
           if (bio.isNotEmpty) ...[
             const SizedBox(height: 24),
             const SectionHeader(AppStrings.about),
             const SizedBox(height: 8),
             Text(bio, style: text.bodyLarge),
           ],
+          _WorkPhotos(workerId: worker.id),
           const SizedBox(height: 24),
           const SectionHeader(AppStrings.services),
           const SizedBox(height: 8),
           _ServiceList(services: details.services),
           const SizedBox(height: 24),
           // Only workers customers can see can be reviewed or reported.
-          _Reviews(
-            workerId: worker.id,
-            count: worker.reviewCount,
-            canReview: !isMe && worker.isApproved && worker.isActive,
-          ),
-          if (!isMe && worker.isApproved && worker.isActive) ...[
+          _Reviews(workerId: worker.id, count: worker.reviewCount, isMe: isMe, canReview: !isMe && listed),
+          if (!isMe && listed) ...[
             const SizedBox(height: 16),
             Center(
               child: TextButton.icon(
@@ -157,6 +212,62 @@ class _Details extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// 'Request a job' when the worker is taking work, or the customer's open
+/// request to them (only one is allowed at a time).
+class _JobRequestButton extends ConsumerWidget {
+  final WorkerListing worker;
+
+  const _JobRequestButton({required this.worker});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(openJobWithProvider(worker.id)) != null) {
+      return OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+        icon: const Icon(Icons.assignment_outlined),
+        label: const Text(AppStrings.seeYourRequest),
+        onPressed: () => context.push(Routes.jobs),
+      );
+    }
+    if (!worker.isAvailable) return const SizedBox.shrink();
+    return FilledButton.icon(
+      icon: const Icon(Icons.assignment_add),
+      label: const Text(AppStrings.requestJob),
+      onPressed: () => context.push(Routes.requestJobFor(worker.id)),
+    );
+  }
+}
+
+/// Photos of past work, when there are any. Tap one to see it full size.
+class _WorkPhotos extends ConsumerWidget {
+  final String workerId;
+
+  const _WorkPhotos({required this.workerId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final photos = ref.watch(workPhotosProvider(workerId)).valueOrNull ?? const [];
+    if (photos.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 24),
+        const SectionHeader(AppStrings.workPhotos),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 120,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, i) => PhotoThumb(url: photos[i].url, size: 120),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -188,21 +299,23 @@ class _ServiceList extends StatelessWidget {
 class _Reviews extends ConsumerWidget {
   final String workerId;
   final int count;
-  final bool canReview;
+  final bool isMe; // the worker: can reply
+  final bool canReview; // a customer, and the worker is listed
 
-  const _Reviews({required this.workerId, required this.count, required this.canReview});
+  const _Reviews({required this.workerId, required this.count, required this.isMe, required this.canReview});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reviews = ref.watch(workerReviewsProvider(workerId));
-    final hasMyReview = canReview && ref.watch(myReviewProvider(workerId)).valueOrNull != null;
+    final contacted = canReview && ref.watch(hasContactedProvider(workerId)).valueOrNull == true;
+    final hasMyReview = contacted && ref.watch(myReviewProvider(workerId)).valueOrNull != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeader(
           '${AppStrings.reviews} ($count)',
-          action: canReview
+          action: contacted
               ? TextButton.icon(
                   icon: const Icon(Icons.rate_review_outlined),
                   label: Text(hasMyReview ? AppStrings.editReview : AppStrings.writeReview),
@@ -210,6 +323,10 @@ class _Reviews extends ConsumerWidget {
                 )
               : null,
         ),
+        if (canReview && !contacted) ...[
+          const SizedBox(height: 8),
+          const InfoNote(icon: Icons.rate_review_outlined, text: AppStrings.reviewAfterContact),
+        ],
         reviews.when(
           loading: () => const Padding(
             padding: EdgeInsets.all(16),
@@ -236,7 +353,16 @@ class _Reviews extends ConsumerWidget {
                   children: [
                     for (final (i, review) in reviews.indexed) ...[
                       if (i > 0) const Divider(),
-                      ReviewTile(review: review),
+                      ReviewTile(
+                        review: review,
+                        onReply: isMe
+                            ? () async {
+                                final saved = await replyToReview(context, review,
+                                    (reply) => ref.read(reviewRepositoryProvider).replyToReview(review.id, reply));
+                                if (saved) ref.invalidate(workerReviewsProvider(workerId));
+                              }
+                            : null,
+                      ),
                     ],
                   ],
                 ),

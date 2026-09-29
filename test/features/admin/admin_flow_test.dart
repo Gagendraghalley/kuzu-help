@@ -1,6 +1,7 @@
 import 'package:bhutan_services/core/constants/app_constants.dart';
 import 'package:bhutan_services/core/strings/app_strings.dart';
 import 'package:bhutan_services/shared/models/profile.dart';
+import 'package:bhutan_services/shared/models/report.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -154,6 +155,73 @@ void main() {
       await pumpApp(tester, loggedIn: true, active: false);
       expect(find.text(AppStrings.deactivatedTitle), findsOneWidget);
       expect(find.text(AppStrings.createPasswordTitle), findsNothing);
+    });
+  });
+
+  group('reports', () {
+    Report aboutPema({String status = ReportStatus.open}) => Report(
+          id: 'report-1',
+          workerId: 'pema',
+          workerName: 'Pema Dorji',
+          reporterName: 'Karma Wangdi',
+          reporterEmail: 'karma@example.com',
+          reason: 'overcharged',
+          details: 'Asked Nu 2000 for a small job.',
+          status: status,
+          createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        );
+
+    Future<Fakes> openReports(WidgetTester tester) async {
+      final fakes = await pumpApp(tester,
+          role: UserRole.admin, loggedIn: true, directory: directory(), reports: [aboutPema()]);
+      await tester.tap(find.byTooltip(AppStrings.settings));
+      await tester.pumpAndSettle();
+      await tapAndSettle(tester, AppStrings.reports);
+      return fakes;
+    }
+
+    testWidgets('an admin reads an open report and marks it reviewed', (tester) async {
+      final fakes = await openReports(tester);
+      expect(find.text(AppStrings.reportReason('overcharged')), findsOneWidget);
+      expect(find.text('Asked Nu 2000 for a small job.'), findsOneWidget);
+      expect(find.text('${AppStrings.reportedBy('Karma Wangdi')} · 5 min ago'), findsOneWidget);
+
+      await tapAndSettle(tester, 'Pema Dorji');
+      expect(find.text('karma@example.com'), findsOneWidget);
+      await tapAndSettle(tester, AppStrings.markReviewed);
+
+      expect(fakes.admin.reports.single.status, ReportStatus.reviewed);
+      expect(find.text(AppStrings.reportStatusChanged(ReportStatus.reviewed)), findsOneWidget);
+      expect(find.text(AppStrings.noReports(ReportStatus.open)), findsOneWidget);
+
+      await tapAndSettle(tester, AppStrings.reportStatusLabel(ReportStatus.reviewed));
+      expect(find.text('Pema Dorji'), findsOneWidget);
+      await tapAndSettle(tester, 'Pema Dorji');
+      await tapAndSettle(tester, AppStrings.closeReport);
+      expect(fakes.admin.reports.single.status, ReportStatus.closed);
+    });
+
+    testWidgets("a report opens the worker's page, to deactivate them", (tester) async {
+      await openReports(tester);
+
+      await tapAndSettle(tester, 'Pema Dorji');
+      await tapAndSettle(tester, AppStrings.openWorkerPage);
+      expect(find.text(AppStrings.adminCheck), findsOneWidget);
+    });
+
+    testWidgets('the new-report notification opens Reports', (tester) async {
+      await pumpApp(tester, role: UserRole.admin, loggedIn: true, directory: directory(), reports: [
+        aboutPema(),
+      ], notifications: [
+        notice(NotificationTypes.reportNew,
+            data: {'worker_id': 'pema', 'worker_name': 'Pema Dorji', 'reason': 'overcharged'}),
+      ]);
+      await tester.tap(find.byTooltip(AppStrings.notifications));
+      await tester.pumpAndSettle();
+
+      await tapAndSettle(tester, 'New report about Pema Dorji');
+      expect(find.text(AppStrings.reports), findsOneWidget); // app bar
+      expect(find.text('Asked Nu 2000 for a small job.'), findsOneWidget);
     });
   });
 }

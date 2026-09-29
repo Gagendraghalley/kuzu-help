@@ -72,12 +72,29 @@ void main() {
     expect(find.text(AppStrings.needService), findsOneWidget);
   });
 
-  testWidgets('users cannot delete their own account, or reach admin tools', (tester) async {
+  testWidgets('users cannot reach admin tools', (tester) async {
     await openSettings(tester);
 
-    expect(find.textContaining('Delete'), findsNothing);
     expect(find.text(AppStrings.users), findsNothing);
     expect(find.text(AppStrings.workersAwaitingApproval), findsNothing);
+    expect(find.text(AppStrings.reports), findsNothing);
+  });
+
+  testWidgets('deleting the account asks first, then deletes it and returns to Welcome', (tester) async {
+    final fakes = await openSettings(tester);
+
+    await scrollAndTap(tester, find.text(AppStrings.deleteAccount));
+    expect(find.text(AppStrings.deleteAccountMessage), findsOneWidget);
+    await tapAndSettle(tester, AppStrings.cancel);
+    expect(fakes.profile.deleted, isFalse);
+    expect(fakes.auth.isLoggedIn, isTrue);
+
+    await scrollAndTap(tester, find.text(AppStrings.deleteAccount));
+    await confirmDialog(tester, AppStrings.deleteForGood);
+    expect(fakes.profile.deleted, isTrue);
+    expect(fakes.auth.isLoggedIn, isFalse);
+    expect(find.text(AppStrings.accountDeleted), findsOneWidget);
+    expect(find.text(AppStrings.needService), findsOneWidget);
   });
 
   testWidgets('a worker can stop offering services and becomes a customer', (tester) async {
@@ -91,13 +108,14 @@ void main() {
     expect(find.text(AppStrings.whatDoYouNeed), findsOneWidget);
   });
 
-  testWidgets('admins cannot switch to customer or worker', (tester) async {
+  testWidgets('admins cannot switch to customer or worker, or delete their account', (tester) async {
     await pumpApp(tester, role: UserRole.admin, loggedIn: true);
     await tester.tap(find.byTooltip(AppStrings.settings));
     await tester.pumpAndSettle();
 
     expect(find.text(AppStrings.becomeWorker), findsNothing);
     expect(find.text(AppStrings.stopOfferingServices), findsNothing);
+    expect(find.text(AppStrings.deleteAccount), findsNothing);
   });
 
   testWidgets('a customer becomes a worker and goes to worker profile setup', (tester) async {

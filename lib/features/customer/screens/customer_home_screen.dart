@@ -48,6 +48,40 @@ class CustomerHomeScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(AppStrings.whatDoYouNeed, style: text.bodyLarge),
+                      const SizedBox(height: 16),
+                      // Looks like a search box; the search itself is its own screen.
+                      Semantics(
+                        button: true,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => context.push(Routes.searchWorkers),
+                          child: InputDecorator(
+                            decoration: const InputDecoration(prefixIcon: Icon(Icons.search)),
+                            child: Text(AppStrings.searchWorkers,
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Row(
+                        children: [
+                          Expanded(
+                            child: _Shortcut(
+                              icon: Icons.favorite_border,
+                              label: AppStrings.savedWorkers,
+                              route: Routes.savedWorkers,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: _Shortcut(
+                              icon: Icons.assignment_outlined,
+                              label: AppStrings.myJobRequests,
+                              route: Routes.jobs,
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 20),
                       Row(
                         children: [
@@ -73,6 +107,35 @@ class CustomerHomeScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small card button under the search box.
+class _Shortcut extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String route;
+
+  const _Shortcut({required this.icon, required this.label, required this.route});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push(route),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.primaryDeep),
+              const SizedBox(width: 8),
+              Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+            ],
+          ),
         ),
       ),
     );

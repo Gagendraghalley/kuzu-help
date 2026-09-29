@@ -59,6 +59,13 @@ class ProfileRepository {
   Future<void> becomeCustomer() async {
     await _db.rpc('become_customer');
   }
+
+  /// D1 'Delete account': the delete-account Edge Function removes the user's
+  /// photos and documents, then the account; the database deletes everything
+  /// linked to it. Refused for admins and deactivated users. Log out after.
+  Future<void> deleteAccount() async {
+    await _db.functions.invoke('delete-account');
+  }
 }
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) => ProfileRepository(ref.watch(supabaseProvider)));

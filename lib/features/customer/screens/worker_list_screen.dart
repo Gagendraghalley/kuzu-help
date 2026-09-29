@@ -22,7 +22,9 @@ class WorkerListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final category = ref.watch(selectedCategoryProvider);
-    final results = ref.watch(workerSearchProvider);
+    final availableOnly = ref.watch(availableOnlyProvider);
+    final results = ref.watch(workerSearchProvider).whenData((results) =>
+        availableOnly ? results.where((r) => r.worker.isAvailable).toList() : results);
     final everywhere = ref.watch(selectedDzongkhagProvider).valueOrNull == kAllDzongkhags;
     final service = category?.name ?? '';
 
@@ -32,12 +34,21 @@ class WorkerListScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: [DzongkhagSelector(), SortSelector()],
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const DzongkhagSelector(),
+                  const SortSelector(),
+                  FilterChip(
+                    label: const Text(AppStrings.availableNow),
+                    selected: availableOnly,
+                    onSelected: (on) => ref.read(availableOnlyProvider.notifier).state = on,
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -55,9 +66,11 @@ class WorkerListScreen extends ConsumerWidget {
                               height: constraints.maxHeight,
                               child: EmptyState(
                                 icon: Icons.person_search_outlined,
-                                message: everywhere
-                                    ? AppStrings.noWorkersAnywhere(service)
-                                    : AppStrings.noWorkersYet(service),
+                                message: availableOnly
+                                    ? AppStrings.noneAvailableNow(service)
+                                    : everywhere
+                                        ? AppStrings.noWorkersAnywhere(service)
+                                        : AppStrings.noWorkersYet(service),
                               ),
                             ),
                           ),

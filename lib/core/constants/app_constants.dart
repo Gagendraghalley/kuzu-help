@@ -13,6 +13,28 @@ class VerificationStatus {
 class Buckets {
   static const avatars = 'avatars';                    // public
   static const verificationDocs = 'verification-docs'; // private
+  static const workPhotos = 'work-photos';             // public
+  static const jobPhotos = 'job-photos';               // private: the customer, the job's worker, admins
+}
+
+/// job_requests.status values (supabase/updates.sql, section 11).
+class JobStatus {
+  static const pending = 'pending';
+  static const accepted = 'accepted';
+  static const declined = 'declined';
+  static const cancelled = 'cancelled';
+  static const completed = 'completed';
+
+  /// Still going on: shown under 'Active'; only one per customer and worker.
+  static bool isOpen(String status) => status == pending || status == accepted;
+}
+
+/// reports.status values. Only admins change them (set_report_status in updates.sql).
+class ReportStatus {
+  static const open = 'open';
+  static const reviewed = 'reviewed';
+  static const closed = 'closed';
+  static const all = [open, reviewed, closed];
 }
 
 class ReportReasons {
@@ -40,6 +62,12 @@ class NotificationTypes {
   static const reportUpdated = 'report_updated';
   static const accountDeactivated = 'account_deactivated';
   static const accountReactivated = 'account_reactivated';
+  static const reviewReply = 'review_reply';
+  static const jobNew = 'job_new';             // the worker
+  static const jobAccepted = 'job_accepted';   // the customer
+  static const jobDeclined = 'job_declined';   // the customer
+  static const jobCancelled = 'job_cancelled'; // the worker
+  static const jobCompleted = 'job_completed'; // whoever didn't mark it done
 }
 
 /// C3: which contact button a customer tapped (record_contact in updates.sql).
@@ -58,4 +86,5 @@ class AppConstants {
   static const otpResendSeconds = 60;
   static const minPasswordLength = 8; // match Supabase > Auth > Email > Minimum password length
   static const maxImageKb = 200;
+  static const maxWorkPhotos = 12; // match work_photos in supabase/updates.sql
 }

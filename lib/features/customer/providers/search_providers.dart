@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/dzongkhags.dart';
 import '../../../shared/models/service_category.dart';
+import '../../../shared/models/worker_listing.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../data/directory_repository.dart';
@@ -49,6 +50,18 @@ final selectedCategoryProvider = StateProvider<ServiceCategory?>((ref) => null);
 
 /// C2 sort order.
 final workerSortProvider = StateProvider<WorkerSort>((ref) => WorkerSort.rating);
+
+/// C2 'Available now': only workers taking work.
+final availableOnlyProvider = StateProvider<bool>((ref) => false);
+
+/// C1 search by name: what's typed, and the workers found.
+final nameSearchProvider = StateProvider.autoDispose<String>((ref) => '');
+
+final nameSearchResultsProvider = FutureProvider.autoDispose<List<WorkerListing>>((ref) {
+  final query = ref.watch(nameSearchProvider).trim();
+  if (query.length < 2) return const [];
+  return ref.watch(directoryRepositoryProvider).searchByName(query);
+});
 
 /// C2 results: approved workers for the selected category and dzongkhag.
 /// Admins also see workers waiting for approval, so they can find new sign-ups.

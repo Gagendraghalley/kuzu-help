@@ -13,6 +13,7 @@ class Routes {
   static const workerVerification = '/worker/verification';
   static const workerPending = '/worker/pending';
   static const workerDashboard = '/worker';
+  static const workPhotos = '/worker/photos';
 
   // Customer (Part C)
   static const customerHome = '/home';
@@ -20,10 +21,17 @@ class Routes {
   static const workerDetails = '/home/worker/:id';
   static const writeReview = '/home/worker/:id/review';
   static const reportWorker = '/home/worker/:id/report';
+  static const requestJob = '/home/worker/:id/request';
+  static const searchWorkers = '/home/search';
+  static const savedWorkers = '/home/saved';
 
   static String workerDetailsFor(String id) => '/home/worker/$id';
   static String writeReviewFor(String id) => '/home/worker/$id/review';
   static String reportWorkerFor(String id) => '/home/worker/$id/report';
+  static String requestJobFor(String id) => '/home/worker/$id/request';
+
+  // Job requests: sent (customers) or received (workers)
+  static const jobs = '/jobs';
 
   // Shared (Part D)
   static const settings = '/settings';
@@ -33,4 +41,5 @@ class Routes {
   // Admin (Phase 5)
   static const pendingWorkers = '/admin/pending';
   static const users = '/admin/users';
+  static const reports = '/admin/reports';
 }

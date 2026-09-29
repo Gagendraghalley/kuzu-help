@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/admin/screens/pending_workers_screen.dart';
+import '../../features/admin/screens/reports_screen.dart';
 import '../../features/admin/screens/users_screen.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/screens/deactivated_screen.dart';
@@ -15,9 +16,13 @@ import '../../features/auth/screens/verify_otp_screen.dart';
 import '../../features/auth/screens/welcome_screen.dart';
 import '../../features/customer/screens/customer_home_screen.dart';
 import '../../features/customer/screens/report_worker_screen.dart';
+import '../../features/customer/screens/saved_workers_screen.dart';
+import '../../features/customer/screens/search_workers_screen.dart';
 import '../../features/customer/screens/worker_details_screen.dart';
 import '../../features/customer/screens/worker_list_screen.dart';
 import '../../features/customer/screens/write_review_screen.dart';
+import '../../features/jobs/screens/job_request_screen.dart';
+import '../../features/jobs/screens/jobs_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
@@ -25,6 +30,7 @@ import '../../features/worker/screens/pending_approval_screen.dart';
 import '../../features/worker/screens/profile_setup_screen.dart';
 import '../../features/worker/screens/services_prices_screen.dart';
 import '../../features/worker/screens/verification_upload_screen.dart';
+import '../../features/worker/screens/work_photos_screen.dart';
 import '../../features/worker/screens/worker_dashboard_screen.dart';
 import 'route_names.dart';
 
@@ -50,9 +56,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.workerVerification, builder: (_, __) => const VerificationUploadScreen()),
       GoRoute(path: Routes.workerPending, builder: (_, __) => const PendingApprovalScreen()),
       GoRoute(path: Routes.workerDashboard, builder: (_, __) => const WorkerDashboardScreen()),
+      GoRoute(path: Routes.workPhotos, builder: (_, __) => const WorkPhotosScreen()),
 
       GoRoute(path: Routes.customerHome, builder: (_, __) => const CustomerHomeScreen()),
       GoRoute(path: Routes.workerList, builder: (_, __) => const WorkerListScreen()),
+      GoRoute(path: Routes.searchWorkers, builder: (_, __) => const SearchWorkersScreen()),
+      GoRoute(path: Routes.savedWorkers, builder: (_, __) => const SavedWorkersScreen()),
       GoRoute(
         path: Routes.workerDetails,
         builder: (_, s) => WorkerDetailsScreen(workerId: s.pathParameters['id']!),
@@ -65,6 +74,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: Routes.reportWorker,
         builder: (_, s) => ReportWorkerScreen(workerId: s.pathParameters['id']!),
       ),
+      GoRoute(
+        path: Routes.requestJob,
+        builder: (_, s) => JobRequestScreen(workerId: s.pathParameters['id']!),
+      ),
+      GoRoute(path: Routes.jobs, builder: (_, __) => const JobsScreen()),
 
       GoRoute(path: Routes.settings, builder: (_, __) => const SettingsScreen()),
       GoRoute(path: Routes.editProfile, builder: (_, __) => const EditProfileScreen()),
@@ -72,6 +86,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       GoRoute(path: Routes.pendingWorkers, builder: (_, __) => const PendingWorkersScreen()),
       GoRoute(path: Routes.users, builder: (_, __) => const UsersScreen()),
+      GoRoute(path: Routes.reports, builder: (_, __) => const ReportsScreen()),
     ],
   );
 });

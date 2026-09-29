@@ -40,6 +40,12 @@ class ReviewRepository {
       'comment': comment,
     }, onConflict: 'worker_id,customer_id');
   }
+
+  /// B5 and C3 (their own page): the worker's public answer to a review; an
+  /// empty [reply] removes it. The customer is told (supabase/updates.sql, section 8).
+  Future<void> replyToReview(String reviewId, String reply) async {
+    await _db.rpc('reply_to_review', params: {'review_id': reviewId, 'reply_text': reply});
+  }
 }
 
 final reviewRepositoryProvider = Provider<ReviewRepository>((ref) => ReviewRepository(ref.watch(supabaseProvider)));

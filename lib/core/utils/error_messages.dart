@@ -30,6 +30,10 @@ class ErrorMessages {
     if (error is PostgrestException && (error.code == 'PGRST202' || error.code == 'PGRST205')) {
       return AppStrings.databaseUpdateNeeded;
     }
+    // The delete-account Edge Function isn't deployed (see the README).
+    if (error is FunctionException && error.status == 404) {
+      return AppStrings.accountDeletionNotSetUp;
+    }
     // Everything else, including no internet and database errors.
     return AppStrings.genericError;
   }

@@ -56,9 +56,38 @@ Flutter + Supabase marketplace connecting customers with verified local workers.
 
      Workers aren't told which customer reviewed or contacted them, as reviews don't
      show names. Tapping a notification opens what it's about (the worker's page, Users,
-     or the worker's dashboard).
+     Reports, or the worker's dashboard).
+   - **Reports**: admins read customers' reports in the app (Settings → Reports), open the
+     worker's page, and mark each report reviewed or closed. The customer who sent it is
+     notified.
+   - **Reviews only after getting in touch**: a customer can review a worker once they've
+     tapped Call or WhatsApp on their page, or sent them a job request (the database
+     checks this, so fake reviews are harder). Earlier reviewers keep their reviews.
+   - **Replies to reviews**: workers answer a review from their dashboard or their own
+     page; the reply shows under it and the customer is notified.
+   - **Photos of work**: workers add up to 12 photos of finished jobs (Dashboard or
+     Settings → Photos of your work), shown on their page. Stored in the public
+     `work-photos` bucket.
+   - **Search and saved workers**: search workers by name from Customer Home, an
+     "Available now" filter on the worker list, and a heart to save workers (Customer Home →
+     Saved workers).
+   - **Job requests**: customers describe a job (what, where, when, their phone number and
+     an optional photo in the private `job-photos` bucket) from a worker's page. Workers
+     accept or decline with an optional note, either side marks it done, and customers can
+     cancel until then. Each step notifies the other person. One open request per customer
+     and worker; only workers set to "Available" can get them.
+   - **Dzongkha category names**: fill in `service_categories.name_dz` in the Table Editor
+     and Customer Home shows it under the English name. The rest of the app is English
+     until its text (all in `app_strings.dart`) is translated.
 
-   Users can't delete their own account in the app; admins deactivate accounts instead.
+   **Deleting accounts** (Settings → Delete account; Apple and Google require it for apps
+   with sign-up): deploy the Edge Function in `supabase/functions/delete-account/`. In
+   Supabase go to Edge Functions → Deploy a new function → Via Editor, name it
+   `delete-account`, paste in `index.ts` and press Deploy (or, with the Supabase CLI,
+   `supabase functions deploy delete-account`); deploy it again whenever `index.ts`
+   changes. It deletes the user's photos and documents in every bucket, then their account
+   and everything linked to it. Admins and deactivated users can't
+   delete their account (deactivated users could otherwise sign up again).
 
 5. Copy `config/dev.example.json` to `config/dev.json` and fill in your Supabase
    Project URL and anon (publishable) key. `dev.json` is gitignored.
@@ -88,13 +117,14 @@ Flutter + Supabase marketplace connecting customers with verified local workers.
 | --- | --- |
 | `lib/core` | Supabase client, theme, routes, constants, all display strings, utilities |
 | `lib/features/auth` | A1–A5: splash, welcome/role, login, verify code, set password; 'account deactivated' |
-| `lib/features/worker` | B1–B5: profile setup, services, verification, pending, dashboard |
-| `lib/features/customer` | C1–C5: home, worker list, details, review, report |
-| `lib/features/profile` | D1: settings, edit profile, change password, logout |
-| `lib/features/admin` | Workers awaiting approval, Users, and the 'Admin check' card (approve, reject, deactivate) |
+| `lib/features/worker` | B1–B5: profile setup, services, verification, pending, dashboard; photos of work |
+| `lib/features/customer` | C1–C5: home, worker list, details, review, report; search by name, saved workers |
+| `lib/features/jobs` | Job requests: the request form, and the list both sides answer from |
+| `lib/features/profile` | D1: settings, edit profile, change password, logout, delete account |
+| `lib/features/admin` | Workers awaiting approval, Users, Reports, and the 'Admin check' card (approve, reject, deactivate) |
 | `lib/features/notifications` | The bell (unread count) and the Notifications screen |
 | `lib/shared` | Models and reusable widgets |
-| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the delete-account Edge Function (no longer called by the app) |
+| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the delete-account Edge Function (Settings → Delete account) |
 
 Each feature has `screens/` (display only), `providers/` (Riverpod state) and
 `data/` (the only files that talk to Supabase).

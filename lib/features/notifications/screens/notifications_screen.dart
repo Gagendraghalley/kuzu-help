@@ -10,7 +10,9 @@ import '../../../core/utils/error_messages.dart';
 import '../../../shared/models/app_notification.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../admin/providers/admin_providers.dart';
 import '../../customer/providers/worker_details_providers.dart';
+import '../../jobs/providers/job_providers.dart';
 import '../data/notification_repository.dart';
 import '../providers/notification_providers.dart';
 
@@ -84,6 +86,12 @@ class _NotificationTile extends ConsumerWidget {
         NotificationTypes.contact => Icons.call_outlined,
         NotificationTypes.accountDeactivated => Icons.block,
         NotificationTypes.accountReactivated => Icons.lock_open,
+        NotificationTypes.reviewReply => Icons.reply,
+        NotificationTypes.jobNew => Icons.assignment_outlined,
+        NotificationTypes.jobAccepted => Icons.event_available,
+        NotificationTypes.jobDeclined => Icons.event_busy,
+        NotificationTypes.jobCancelled => Icons.cancel_outlined,
+        NotificationTypes.jobCompleted => Icons.task_alt,
         _ => Icons.notifications_none,
       };
 
@@ -97,13 +105,23 @@ class _NotificationTile extends ConsumerWidget {
     switch (n.type) {
       case NotificationTypes.newUser:
         context.push(Routes.users);
+      case NotificationTypes.reportNew:
+        ref.invalidate(reportsProvider);
+        context.push(Routes.reports);
       // The worker's page: the Admin check card for admins, reviews for the
       // worker. Reloaded, as it may have changed since it was last opened.
+      case NotificationTypes.jobNew ||
+            NotificationTypes.jobAccepted ||
+            NotificationTypes.jobDeclined ||
+            NotificationTypes.jobCancelled ||
+            NotificationTypes.jobCompleted:
+        ref.invalidate(myJobsProvider);
+        context.push(Routes.jobs);
       case NotificationTypes.workerSubmitted ||
             NotificationTypes.workerResubmitted ||
-            NotificationTypes.reportNew ||
             NotificationTypes.reviewNew ||
-            NotificationTypes.reviewUpdated
+            NotificationTypes.reviewUpdated ||
+            NotificationTypes.reviewReply
           when workerId != null:
         ref.invalidate(workerDetailsProvider(workerId));
         ref.invalidate(workerReviewsProvider(workerId));
