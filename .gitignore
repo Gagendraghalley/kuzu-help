@@ -1,0 +1,17 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/
+
+# Secrets - NEVER commit these
+config/*.json
+!config/dev.example.json
+android/key.properties
+*.jks
+*.keystore
+supabase/.env

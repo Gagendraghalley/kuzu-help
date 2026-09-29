@@ -1,0 +1,64 @@
+import 'dart:typed_data';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/constants/app_constants.dart';
+import '../../../core/supabase/supabase_client.dart';
+import '../../../core/utils/storage_paths.dart';
+import '../../../shared/models/profile.dart';
+
+/// The only place in this feature that talks to Supabase.
+class ProfileRepository {
+  final SupabaseClient _db;
+  ProfileRepository(this._db);
+
+  /// The logged-in user's profiles row, or null if there is none.
+  Future<Profile?> getMyProfile() async {
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null) return null;
+    final row = await _db.from('profiles').select().eq('id', userId).maybeSingle();
+    return row == null ? null : Profile.fromJson(row);
+  }
+
+  /// D1 and B1: name, photo and location, the only columns users may change.
+  /// [photo] is a new JPEG, when one was picked.
+  Future<void> updateProfile({
+    required String fullName,
+    String? dzongkhag,
+    String? town,
+    Uint8List? photo,
+  }) async {
+    final userId = _db.auth.currentUser!.id;
+    final changes = <String, dynamic>{
+      'full_name': fullName,
+      'dzongkhag': dzongkhag,
+      'town': town,
+    };
+    if (photo != null) changes['avatar_url'] = await _uploadAvatar(userId, photo);
+    await _db.from('profiles').update(changes).eq('id', userId);
+  }
+
+  /// A new file name each time (storage_paths.dart), so phones that cached the
+  /// old photo show the new one.
+  Future<String> _uploadAvatar(String userId, Uint8List photo) async {
+    final path = StoragePaths.avatar(userId);
+    final bucket = _db.storage.from(Buckets.avatars);
+    await bucket.uploadBinary(path, photo, fileOptions: const FileOptions(contentType: 'image/jpeg'));
+    return bucket.getPublicUrl(path);
+  }
+
+  /// D1 'Become a worker': customer -> worker only (schema.sql, section 4).
+  Future<void> becomeWorker() async {
+    await _db.rpc('become_worker');
+  }
+
+  /// D1 / B1 'Stop offering services': worker -> customer only
+  /// (supabase/updates.sql). The worker profile is kept, hidden from customers,
+  /// for if they offer services again. Admins can't switch either way.
+  Future<void> becomeCustomer() async {
+    await _db.rpc('become_customer');
+  }
+}
+
+final profileRepositoryProvider = Provider<ProfileRepository>((ref) => ProfileRepository(ref.watch(supabaseProvider)));
