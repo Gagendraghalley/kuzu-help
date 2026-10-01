@@ -268,6 +268,60 @@ void main() {
       expect(fakes.bookings.booked, isEmpty);
     });
 
+    testWidgets("with a booking at a ground, a customer can't book it again until it's over; others they can",
+        (tester) async {
+      await openHome(tester, seeds: [
+        (v, g) => groundBooking(venue: v, ground: g, start: tomorrowAt(18), hours: 2, status: BookingStatus.confirmed),
+      ]);
+      await openSportsGrounds(tester);
+      await scrollAndTap(tester, find.text('Changli Futsal'));
+      await scrollAndTap(tester, find.text(AppStrings.book));
+
+      final when = AppStrings.bookingTime(tomorrowAt(18), tomorrowAt(20));
+      expect(find.text(AppStrings.alreadyBookedHere(when)), findsOneWidget);
+      expect(find.text(AppStrings.sendBookingRequest), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, AppStrings.myBookings), findsOneWidget);
+
+      // Another ground: booking as usual.
+      GoRouter.of(tester.element(find.text(AppStrings.alreadyBookedHere(when))))
+          .push(Routes.bookGroundFor('venue-paro', 'ground-paro'));
+      await tester.pumpAndSettle();
+      expect(find.text(AppStrings.alreadyBookedHere(when)), findsNothing);
+      expect(find.text(AppStrings.sendBookingRequest), findsOneWidget);
+    });
+
+    testWidgets('once the booking is over, the customer can book that ground again', (tester) async {
+      final past = BhutanTime.at(BhutanTime.today().subtract(const Duration(days: 1)), 18);
+      await openHome(tester, seeds: [
+        (v, g) => groundBooking(venue: v, ground: g, start: past, hours: 2, status: BookingStatus.confirmed),
+      ]);
+      await openSportsGrounds(tester);
+      await scrollAndTap(tester, find.text('Changli Futsal'));
+      await scrollAndTap(tester, find.text(AppStrings.book));
+      expect(find.text(AppStrings.sendBookingRequest), findsOneWidget);
+    });
+
+    testWidgets('booked there meanwhile from another phone: the database refuses, and the app says why',
+        (tester) async {
+      final fakes = await openHome(tester);
+      await openSportsGrounds(tester);
+      await scrollAndTap(tester, find.text('Changli Futsal'));
+      await scrollAndTap(tester, find.text(AppStrings.book));
+      fakes.bookings.bookings.add(groundBooking(
+          venue: fakes.venues.venues.first, ground: fakes.venues.grounds.first, start: tomorrowAt(18), hours: 2));
+
+      await tapAndSettle(tester, AppStrings.tomorrow);
+      await scrollAndTap(tester, find.text(times(8, 10)));
+      await enterField(tester, AppStrings.jobPhone, '17999999');
+      await tester.pumpAndSettle();
+      await scrollAndTap(tester, find.text(AppStrings.sendBookingRequest));
+
+      expect(find.text(AppStrings.alreadyBookedHereShort), findsOneWidget);
+      expect(fakes.bookings.booked, isEmpty);
+      expect(find.text(AppStrings.alreadyBookedHere(AppStrings.bookingTime(tomorrowAt(18), tomorrowAt(20)))),
+          findsOneWidget); // the booking from the other phone
+    });
+
     testWidgets('a customer cancels an upcoming booking from My bookings', (tester) async {
       final fakes = await openHome(tester, seeds: [
         (v, g) => groundBooking(venue: v, ground: g, start: tomorrowAt(18)),
@@ -479,21 +533,16 @@ void main() {
       expect(find.widgetWithText(TextFormField, AppStrings.name), findsOneWidget);
     });
 
-    testWidgets('a player adds home services in Settings, and from then on has Customer Home', (tester) async {
+    testWidgets("a player's Settings can't add home services: roles come from signing up", (tester) async {
       final fakes = await openHome(tester, role: UserRole.player, roles: const []);
       expect(find.byType(PlayerHomeScreen), findsOneWidget);
-      expect(find.text('Changli Futsal'), findsOneWidget);
       expect(find.text(AppStrings.whatDoYouNeed), findsNothing); // grounds only
 
       await tester.tap(find.byTooltip(AppStrings.settings));
       await tester.pumpAndSettle();
-      expect(find.text(AppStrings.addService(UserRole.player)), findsNothing); // has it
-      expect(find.text(AppStrings.becomeWorker), findsNothing); // a customer's
-      await scrollAndTap(tester, find.text(AppStrings.addService(UserRole.customer)));
-
-      expect(fakes.profile.profile.role, UserRole.customer);
-      expect(fakes.profile.profile.roles, containsAll([UserRole.customer, UserRole.player]));
-      expect(find.text(AppStrings.whatDoYouNeed), findsOneWidget); // Customer Home, with grounds too
+      expect(find.text(AppStrings.addService(UserRole.customer)), findsNothing);
+      expect(find.text(AppStrings.addService(UserRole.player)), findsNothing);
+      expect(fakes.profile.addedRoles, isEmpty);
     });
 
     testWidgets('the rest of the app still needs an account', (tester) async {

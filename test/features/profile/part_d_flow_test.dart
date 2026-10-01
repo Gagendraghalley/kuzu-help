@@ -27,7 +27,6 @@ void main() {
     expect(find.text('Test'), findsOneWidget);
     expect(find.text('test@example.com'), findsOneWidget);
     expect(find.text(AppStrings.roleLabel(UserRole.customer)), findsOneWidget);
-    expect(find.text(AppStrings.becomeWorker), findsOneWidget);
   });
 
   testWidgets('D1 edit profile saves the name and location', (tester) async {
@@ -113,18 +112,17 @@ void main() {
     await tester.tap(find.byTooltip(AppStrings.settings));
     await tester.pumpAndSettle();
 
-    expect(find.text(AppStrings.becomeWorker), findsNothing);
     expect(find.text(AppStrings.stopOfferingServices), findsNothing);
     expect(find.text(AppStrings.deleteAccount), findsNothing);
   });
 
-  testWidgets('a customer becomes a worker and goes to worker profile setup', (tester) async {
-    final fakes = await openSettings(tester);
+  testWidgets("Settings has no role switching: roles come from signing up, and admins' Users", (tester) async {
+    final fakes = await openSettings(tester); // a customer
 
-    await tapAndSettle(tester, AppStrings.becomeWorker);
-    await confirmDialog(tester, AppStrings.continueLabel);
-
-    expect(fakes.profile.profile.role, UserRole.worker);
-    expect(find.text(AppStrings.workerProfileTitle), findsOneWidget);
+    expect(find.text(AppStrings.stopOfferingServices), findsNothing);
+    expect(find.text(AppStrings.addService(UserRole.player)), findsNothing);
+    expect(find.text(AppStrings.addService(UserRole.customer)), findsNothing);
+    expect(find.textContaining('worker'), findsNothing); // no 'Become a worker'
+    expect(fakes.profile.profile.role, UserRole.customer);
   });
 }

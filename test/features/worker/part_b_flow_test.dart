@@ -156,7 +156,7 @@ void main() {
     expect(find.text('Very helpful.'), findsOneWidget);
   });
 
-  testWidgets('an approved worker can stop offering services from Settings', (tester) async {
+  testWidgets("an approved worker's Settings has no role switching", (tester) async {
     final fakes = await pumpApp(
       tester,
       role: UserRole.worker,
@@ -168,12 +168,10 @@ void main() {
     await tester.tap(find.byTooltip(AppStrings.settings));
     await tester.pumpAndSettle();
 
-    await tapAndSettle(tester, AppStrings.stopOfferingServices);
-    await tester.tap(find.widgetWithText(FilledButton, AppStrings.continueLabel));
-    await tester.pumpAndSettle();
-
-    expect(fakes.profile.profile.role, UserRole.customer);
-    expect(find.text(AppStrings.whatDoYouNeed), findsOneWidget);
+    expect(find.text(AppStrings.myServices), findsOneWidget); // their worker settings stay
+    expect(find.text(AppStrings.stopOfferingServices), findsNothing);
+    expect(find.text(AppStrings.addService(UserRole.player)), findsNothing);
+    expect(fakes.profile.profile.role, UserRole.worker);
   });
 
   testWidgets('B5 -> B2: services open to edit and go back when saved', (tester) async {

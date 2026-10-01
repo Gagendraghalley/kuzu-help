@@ -119,6 +119,16 @@ class GroundBooking {
   /// Still to come or going on: shown under 'Upcoming'.
   bool isUpcoming([DateTime? now]) => isOpen && !hasEnded(now);
 
+  /// Until it's over, the customer can't book this ground again (book_ground).
+  /// A request the manager never answered no longer counts: the database
+  /// cancels it before booking.
+  bool keepsGroundBooked([DateTime? now]) {
+    final at = now ?? DateTime.now();
+    final unanswered = status == BookingStatus.pending &&
+        (hasStarted(at) || createdAt.isBefore(at.subtract(BookingStatus.unansweredFor)));
+    return kind == BookingKind.customer && isUpcoming(at) && !unanswered;
+  }
+
   /// Cancelling now is after the venue's free cancellation time.
   bool isLateToCancel([DateTime? now]) =>
       startsAt.subtract(Duration(hours: freeCancelHours)).isBefore(now ?? DateTime.now());

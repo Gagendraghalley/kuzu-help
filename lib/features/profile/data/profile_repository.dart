@@ -69,14 +69,9 @@ class ProfileRepository {
     await _db.rpc('claim_signup_role', params: {'new_role': role});
   }
 
-  /// D1 'Become a worker': customer -> worker only (schema.sql, section 4).
-  Future<void> becomeWorker() async {
-    await _db.rpc('become_worker');
-  }
-
-  /// D1 / B1 'Stop offering services': worker -> customer only
-  /// (supabase/updates.sql). The worker profile is kept, hidden from customers,
-  /// for if they offer services again. Admins can't switch either way.
+  /// B1 'I only want to find workers', for someone who signed up as a worker
+  /// by mistake: worker -> customer only (supabase/updates.sql). The worker
+  /// profile is kept, hidden from customers. Admins can't switch either way.
   Future<void> becomeCustomer() async {
     await _db.rpc('become_customer');
   }

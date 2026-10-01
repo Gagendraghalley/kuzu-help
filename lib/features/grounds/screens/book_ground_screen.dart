@@ -153,10 +153,13 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       if (!mounted) return;
       final taken = e is PostgrestException && e.code == '23P01';
       if (taken) ref.invalidate(availabilityProvider(_dayKey)); // show what's free now
+      // Booked here from another phone: the note about it shows.
+      if (e is PostgrestException && e.code == '23505') ref.invalidate(myBookingsProvider);
       setState(() {
         if (taken) _slot = null;
         _error = switch (e) {
           PostgrestException(code: '23P01') => AppStrings.slotTaken,
+          PostgrestException(code: '23505') => AppStrings.alreadyBookedHereShort,
           PostgrestException(code: '54000') => AppStrings.tooManyWaiting,
           PostgrestException(code: '42501') => AppStrings.groundNotBookable,
           PostgrestException(code: '22023') => AppStrings.timeNotBookable,
@@ -205,7 +208,9 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     // Sports grounds are their own service: an account without them adds
     // them first (the database checks too). Still loading: the form.
     final needsGrounds = widget.profile?.hasRole(UserRole.player) == false;
-    final canBook = widget.loggedIn && !needsGrounds;
+    // One booking of a ground at a time: until it's over, no other here.
+    final current = widget.loggedIn ? ref.watch(myCurrentBookingAtProvider(ground.id)) : null;
+    final canBook = widget.loggedIn && !needsGrounds && current == null;
 
     return Form(
       key: _formKey,
@@ -222,6 +227,13 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 subtitle: Text(AppStrings.sportLabel(ground.sport)),
               ),
             ),
+            if (current != null) ...[
+              const SizedBox(height: 16),
+              InfoNote(
+                icon: Icons.event_available_outlined,
+                text: AppStrings.alreadyBookedHere(AppStrings.bookingTime(current.startsAt, current.endsAt)),
+              ),
+            ],
             const SizedBox(height: 24),
             const SectionHeader(AppStrings.chooseDay),
             const SizedBox(height: 10),
@@ -349,6 +361,12 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                         : AppStrings.bookFor(ground.priceOf(slot)),
                 isLoading: _sending,
                 onPressed: _book,
+              )
+            else if (current != null)
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+                onPressed: () => context.push(Routes.myBookings),
+                child: const Text(AppStrings.myBookings),
               )
             else if (widget.loggedIn) ...[
               const InfoNote(icon: Icons.sports_soccer_rounded, text: AppStrings.addGroundsNote),

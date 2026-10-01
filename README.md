@@ -172,7 +172,9 @@ changed.
    changes (so does `send-push`, for the booking notifications). It deletes the user's
    photos and documents in every bucket, then their account and everything linked to
    it; a ground manager's venues stay, without a manager. Admins and deactivated users can't
-   delete their account (deactivated users could otherwise sign up again).
+   delete their account (deactivated users could otherwise sign up again). Admins also
+   delete other users' accounts with it, from Settings → Users (never another admin's); a
+   version deployed before that only lets users delete themselves, so deploy it again.
 
 5. Copy `config/dev.example.json` to `config/dev.json` and fill in your Supabase
    Project URL and anon (publishable) key. `dev.json` is gitignored.
@@ -295,7 +297,8 @@ How it fits the rest of sign-up:
 - Signing in with Google with an email that already has an account logs into that account
   (Supabase links the two); picking home services or sports grounds adds that service, as
   the email code does. Picking *Offer your services* doesn't turn an existing account into
-  a worker: Settings → *Become a worker* does that.
+  a worker: an admin adds the role in Settings → Users → *Edit roles* (Settings has no
+  role switching for users, so nobody gets confused).
 - Google accounts skip *Create a password*. They can add one in Settings → *Change
   password* (or with *Forgot password?*) to log in with email too.
 - If the button shows an error, check the Web client ID in both `config/dev.json` and

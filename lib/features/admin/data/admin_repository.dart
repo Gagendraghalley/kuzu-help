@@ -76,6 +76,21 @@ class AdminRepository {
     });
   }
 
+  /// Gives a user exactly [roles] (UserRole.editable, plus groundManager kept
+  /// as it is); the main role follows (UserRole.mainOf). Admins' roles can't
+  /// be changed. Needs supabase/updates.sql (set_user_roles).
+  Future<void> setUserRoles(String userId, Set<String> roles) async {
+    await _db.rpc('set_user_roles', params: {'target': userId, 'new_roles': roles.toList()});
+  }
+
+  /// Deletes a user's account for good, as 'Delete account' in their own
+  /// Settings does: the delete-account Edge Function removes their files,
+  /// then the account and everything linked to it. Admins' accounts can't be.
+  /// A FunctionException 403 means the deployed function is older than this.
+  Future<void> deleteUser(String userId) async {
+    await _db.functions.invoke('delete-account', body: {'user_id': userId});
+  }
+
   /// Reports with [status] (a ReportStatus value), newest first. Needs
   /// supabase/updates.sql.
   Future<List<Report>> getReports({required String status}) async {

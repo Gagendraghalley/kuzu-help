@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/router/route_names.dart';
@@ -10,17 +11,21 @@ import '../../../core/utils/error_messages.dart';
 import '../../../shared/models/profile.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/avatar_image.dart';
+import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/info_note.dart';
 import '../../../shared/widgets/verified_badge.dart';
 import '../../customer/providers/search_providers.dart';
 import '../../customer/providers/worker_details_providers.dart';
+import '../../grounds/providers/venue_providers.dart';
 import '../data/admin_repository.dart';
 import '../providers/admin_providers.dart';
 import '../widgets/note_dialog.dart';
+import '../widgets/roles_dialog.dart';
 
-/// Admin: every user, searchable by name or email. Tap one to deactivate
-/// (blacklist) or reactivate them, or to open a worker's page.
+/// Admin: every user, searchable by name or email. Tap one to change their
+/// roles, deactivate (blacklist) or reactivate them, delete their account,
+/// or open a worker's page. Admins' accounts can't be changed.
 class UsersScreen extends ConsumerStatefulWidget {
   const UsersScreen({super.key});
 
@@ -175,23 +180,63 @@ class _UserActionsState extends ConsumerState<_UserActions> {
       );
       if (reason == null) return;
     }
+    await _save(
+      () => ref.read(adminRepositoryProvider).setUserActive(user.id, active: active, reason: reason),
+      done: active ? AppStrings.userReactivated(user.fullName) : AppStrings.userDeactivated(user.fullName),
+    );
+  }
+
+  Future<void> _editRoles() async {
+    final user = widget.user;
+    final roles = await showRolesDialog(context, user);
+    if (roles == null) return;
+    await _save(
+      () => ref.read(adminRepositoryProvider).setUserRoles(user.id, roles),
+      done: AppStrings.rolesSaved(user.fullName),
+    );
+  }
+
+  Future<void> _delete() async {
+    final user = widget.user;
+    final ok = await confirm(
+      context,
+      title: AppStrings.deleteUserTitle(user.fullName),
+      message: AppStrings.deleteUserMessage(user.role),
+      confirmLabel: AppStrings.deleteForGood,
+      destructive: true,
+    );
+    if (!ok) return;
+    await _save(() async {
+      await ref.read(adminRepositoryProvider).deleteUser(user.id);
+      // A manager's venues are left without one.
+      if (user.role == UserRole.groundManager) {
+        ref.invalidate(allVenuesProvider);
+        ref.invalidate(venuesProvider);
+      }
+    }, done: AppStrings.userDeleted(user.fullName));
+  }
+
+  /// Runs [action], then refreshes what shows the user, closes the sheet
+  /// and says [done]; or shows the error and stays.
+  Future<void> _save(Future<void> Function() action, {required String done}) async {
     if (!mounted) return;
+    final user = widget.user;
     setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
-      await ref.read(adminRepositoryProvider).setUserActive(user.id, active: active, reason: reason);
+      await action();
       ref.invalidate(usersProvider);
       ref.invalidate(workerDetailsProvider(user.id));
       ref.invalidate(workerSearchProvider);
       navigator.pop();
-      messenger.showSnackBar(SnackBar(
-        content: Text(active
-            ? AppStrings.userReactivated(user.fullName)
-            : AppStrings.userDeactivated(user.fullName)),
-      ));
+      messenger.showSnackBar(SnackBar(content: Text(done)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(ErrorMessages.from(e))));
+      // From deleting: the deployed delete-account only lets users delete themselves.
+      final message = e is FunctionException && e.status == 403
+          ? AppStrings.userDeletionNeedsUpdate
+          : ErrorMessages.from(e);
+      messenger.showSnackBar(SnackBar(content: Text(message)));
       if (mounted) setState(() => _saving = false);
     }
   }
@@ -229,6 +274,15 @@ class _UserActionsState extends ConsumerState<_UserActions> {
               InfoNote(icon: Icons.block, iconColor: AppColors.error, text: reason),
             ],
             const SizedBox(height: 16),
+            if (user.role != UserRole.admin)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.manage_accounts_outlined, color: Theme.of(context).colorScheme.primary),
+                title: const Text(AppStrings.editRoles),
+                subtitle: Text(user.allRoles.map(AppStrings.roleLabel).join(', ')),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _saving ? null : _editRoles,
+              ),
             if (user.role == UserRole.worker)
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -263,6 +317,19 @@ class _UserActionsState extends ConsumerState<_UserActions> {
                 label: const Text(AppStrings.reactivateAccount),
                 onPressed: () => _setActive(true),
               ),
+            // For good, so quieter than deactivating, which can be undone.
+            if (!_saving && user.role != UserRole.admin) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  foregroundColor: AppColors.error,
+                ),
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text(AppStrings.deleteAccount),
+                onPressed: _delete,
+              ),
+            ],
           ],
         ),
       ),

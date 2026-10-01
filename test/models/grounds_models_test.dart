@@ -214,6 +214,19 @@ void main() {
           .canBeReviewed, isFalse); // not played yet
       expect(AppStrings.bookingStatusLabel(BookingStatus.cancelled, expired: true), 'Expired');
     });
+
+    test('a booking keeps its ground booked for the customer until it is over', () {
+      // Booked 1 Oct 8 am UTC, for 4 Oct 12-2 pm UTC.
+      final waiting = read({});
+      final confirmed = read({'status': 'confirmed'});
+      expect(confirmed.keepsGroundBooked(DateTime.utc(2026, 10, 4, 13)), isTrue); // going on
+      expect(confirmed.keepsGroundBooked(DateTime.utc(2026, 10, 4, 14)), isFalse); // over
+      expect(waiting.keepsGroundBooked(DateTime.utc(2026, 10, 1, 19)), isTrue);
+      expect(waiting.keepsGroundBooked(DateTime.utc(2026, 10, 1, 21)), isFalse); // unanswered for 12 hours
+      expect(read({'status': 'cancelled'}).keepsGroundBooked(DateTime.utc(2026, 10, 2)), isFalse);
+      expect(read({'status': 'confirmed', 'kind': 'owner_block'}).keepsGroundBooked(DateTime.utc(2026, 10, 2)),
+          isFalse);
+    });
   });
 
   test('booking notifications say when and where', () {

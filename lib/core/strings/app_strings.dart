@@ -59,7 +59,7 @@ class AppStrings {
   static const alreadyRegisteredHelp = 'Log in with this email and your password instead. '
       "Forgot your password? Tap 'Forgot password?' on the log in screen.";
   static const alreadyRegisteredWorkerTip =
-      "To offer your services with this account, log in, open Settings and tap 'Become a worker'.";
+      'To offer your services, sign up with another email, or ask our team to add it to this account.';
   static const logInInstead = 'Log in instead';
   static const createPasswordTitle = 'Create a password';
   static const newPasswordTitle = 'Choose a new password';
@@ -227,7 +227,33 @@ class AppStrings {
       "Deactivated: customers can't see this worker, and they can't use the app.";
   static String userDeactivated(String name) => '$name is deactivated.';
   static String userReactivated(String name) => '$name can use the app again.';
-  static const adminsCantBeDeactivated = "Admins can't be deactivated.";
+  static const adminsCantBeDeactivated = "Admins can't be deactivated or deleted.";
+  static String deleteUserTitle(String name) => "Delete $name's account?";
+  static String deleteUserMessage(String role) => [
+        'Their profile, photos, reviews, reports, job requests and bookings are deleted for good.',
+        if (role == UserRole.worker) 'Their worker profile and documents too.',
+        if (role == UserRole.groundManager)
+          "Their venues stay, without a manager, and can't be booked until you choose another. "
+              'Bookings they took by phone, and time they blocked, are deleted.',
+        "This can't be undone, and they could sign up again with the same email. "
+            'To keep someone out, deactivate them instead.',
+      ].join('\n\n');
+  static String userDeleted(String name) => "$name's account is deleted.";
+  static const editRoles = 'Edit roles';
+  static String rolesTitle(String name) => 'Roles for $name';
+  static String roleHint(String role) => switch (role) {
+        UserRole.worker => 'Offers services. Our team checks them before customers see them.',
+        UserRole.groundManager => 'Chosen from Sports venues, with the venue they run.',
+        UserRole.player => 'Sports grounds: books grounds.',
+        _ => 'Home services: finds and contacts workers.',
+      };
+  static const workerNotWithManager = "A ground manager can't be a worker too.";
+  static String mainRoleNote(String role) => 'Main role: ${roleLabel(role)}. It decides the screen they start on.';
+  static const pickARole = 'Choose at least one role.';
+  static String rolesSaved(String name) => 'Roles saved for $name.';
+  static const userDeletionNeedsUpdate =
+      'Deleting users needs the latest delete-account function: deploy '
+      'supabase/functions/delete-account in Supabase again.';
   static const openWorkerPage = 'Open worker page';
 
   // Admin: reports from customers (C5)
@@ -572,6 +598,11 @@ class AppStrings {
   static const tooManyWaiting =
       'You have 3 bookings waiting for an answer. Wait for a ground to reply, or cancel one, then book again.';
   static const groundNotBookable = "This ground isn't taking bookings right now.";
+  static String alreadyBookedHere(String when) =>
+      'You have booked this ground for $when. You can book it again once that time is over. '
+      'Other grounds you can book now.';
+  static const alreadyBookedHereShort =
+      'You already have a booking at this ground. You can book it again once that time is over.';
   static const timeNotBookable = "This time can't be booked. Please choose another.";
   static const ownGround = 'This is your own ground. Block the time from your bookings instead.';
 
@@ -874,21 +905,14 @@ class AppStrings {
   static String addingToAccount(String role) => 'This email already has a Kuzu Help account. Enter the code to '
       'log in: ${serviceLabel(role).toLowerCase()} are added to it, and you keep everything you have.';
   static String addService(String role) => 'Use this account for ${serviceLabel(role).toLowerCase()}';
-  static String addServiceHint(String role) => role == UserRole.player
-      ? 'Book futsal and football grounds, with the same log-in.'
-      : 'Find trusted workers for jobs at home, with the same log-in.';
   static String serviceAdded(String role) => '${serviceLabel(role)} added to your account.';
   static const addGroundsNote = 'Sports grounds are a separate service from home services. Add them to this '
       'account to book: same log-in, and you keep everything you have.';
   static const myServices = 'My services';
   static const stopOfferingServices = 'Stop offering services';
-  static const stopOfferingServicesHint = 'Use Kuzu Help only to find workers';
-  static const stopOfferingServicesMessage = "Customers won't see your worker profile any more. "
-      "To offer your services again later, open Settings and tap 'Become a worker'.";
+  static const stopOfferingServicesMessage = "Customers won't see your worker profile. "
+      'To offer your services later, ask our team to add it to your account.';
   static const onlyWantToFindWorkers = 'I only want to find workers';
-  static const becomeWorkerHint = 'Offer your skills and get customers';
-  static const becomeWorkerMessage =
-      "You'll set up your worker profile next. Our team checks it before customers can see you.";
   static const logoutConfirm = 'Log out of Kuzu Help?';
   static const cancel = 'Cancel';
   static const continueLabel = 'Continue';
@@ -1035,7 +1059,6 @@ class AppStrings {
   static const retry = 'Retry';
   static const genericError = 'Something went wrong. Please check your internet and try again.';
   static const logout = 'Log out';
-  static const becomeWorker = 'Become a worker';
 
   static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   static String shortDate(DateTime date) {

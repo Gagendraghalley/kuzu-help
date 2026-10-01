@@ -8,6 +8,19 @@ class UserRole {
   /// The roles an account adds for itself, one for each service: signing up
   /// for another service with the same email adds it (add_my_role).
   static const addable = {customer, player};
+
+  /// The roles an admin gives and takes away in Users (set_user_roles).
+  static const editable = [customer, player, worker];
+
+  /// An account's main role, which home the app opens, from all its [roles],
+  /// as set_user_roles works it out.
+  static String mainOf(Set<String> roles) => roles.contains(groundManager)
+      ? groundManager
+      : roles.contains(worker)
+          ? worker
+          : roles.contains(customer)
+              ? customer
+              : player;
 }
 
 class VerificationStatus {
@@ -52,6 +65,10 @@ class BookingStatus {
 
   /// Still holding its time on the ground.
   static bool isOpen(String status) => status == pending || status == confirmed;
+
+  /// A request the manager hasn't answered in this long is cancelled
+  /// (expire_stale_ground_bookings).
+  static const unansweredFor = Duration(hours: 12);
 }
 
 /// ground_bookings.kind values: a customer's booking, or time the owner blocked.

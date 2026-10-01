@@ -19,6 +19,9 @@ import '../providers/profile_providers.dart';
 
 /// D1 Settings
 /// Purpose: Account management for everyone; admins also reach their tools here.
+/// No role switching here, so nobody gets confused: an account's roles come
+/// from signing up (another service with the same email adds it), and
+/// admins change them in Users.
 /// Backend: Updates profiles. Customers and workers can delete their account
 /// (the delete-account Edge Function); admins can't.
 /// Done when: Logout, and deleting the account, return to Welcome.
@@ -68,52 +71,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(profileRepositoryProvider).deleteAccount();
       await ref.read(authActionsProvider).signOut();
       messenger.showSnackBar(const SnackBar(content: Text(AppStrings.accountDeleted)));
-    });
-  }
-
-  Future<void> _becomeWorker() async {
-    final ok = await confirm(
-      context,
-      title: AppStrings.becomeWorker,
-      message: AppStrings.becomeWorkerMessage,
-      confirmLabel: AppStrings.continueLabel,
-    );
-    if (!ok) return;
-    await _run(() async {
-      await ref.read(profileRepositoryProvider).becomeWorker();
-      ref.invalidate(myProfileProvider);
-      // The splash (A1) sends workers to profile setup (B1).
-      if (mounted) context.go(Routes.splash);
-    });
-  }
-
-  Future<void> _stopOfferingServices() async {
-    if (!await confirmStopOfferingServices(context)) return;
-    await _run(() async {
-      await ref.read(profileRepositoryProvider).becomeCustomer();
-      ref.invalidate(myProfileProvider);
-      // The splash (A1) sends customers to Customer Home (C1).
-      if (mounted) context.go(Routes.splash);
-    });
-  }
-
-  /// The services [profile] can add: sports grounds for anyone but admins
-  /// (who have everything), home services for players.
-  static List<String> _servicesToAdd(Profile profile) => [
-        if (!profile.hasRole(UserRole.player)) UserRole.player,
-        if (profile.role == UserRole.player && !profile.hasRole(UserRole.customer)) UserRole.customer,
-      ];
-
-  /// Uses another service with this account. A player who adds home
-  /// services has Customer Home from then on (with sports grounds too), so
-  /// the splash opens it.
-  Future<void> _addService(String role) async {
-    await _run(() async {
-      await ref.read(profileRepositoryProvider).addRole(role);
-      ref.invalidate(myProfileProvider);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.serviceAdded(role))));
-      if (role == UserRole.customer) context.go(Routes.splash);
     });
   }
 
@@ -185,7 +142,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       label: AppStrings.changePassword,
                       onTap: () => context.push(Routes.setPassword),
                     ),
-                    // Customers and workers can switch; admins can't.
                     if (profile?.role == UserRole.worker) ...[
                       const _Divider(),
                       _Item(
@@ -199,34 +155,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label: AppStrings.yourWorkPhotos,
                         onTap: () => context.push(Routes.workPhotos),
                       ),
-                      const _Divider(),
-                      _Item(
-                        icon: Icons.search_rounded,
-                        label: AppStrings.stopOfferingServices,
-                        hint: AppStrings.stopOfferingServicesHint,
-                        onTap: _busy ? null : _stopOfferingServices,
-                      ),
                     ],
-                    if (profile?.role == UserRole.customer) ...[
-                      const _Divider(),
-                      _Item(
-                        icon: Icons.storefront_outlined,
-                        label: AppStrings.becomeWorker,
-                        hint: AppStrings.becomeWorkerHint,
-                        onTap: _busy ? null : _becomeWorker,
-                      ),
-                    ],
-                    // Another service with the same log-in (role delegation).
-                    if (profile != null)
-                      for (final role in _servicesToAdd(profile)) ...[
-                        const _Divider(),
-                        _Item(
-                          icon: role == UserRole.player ? Icons.sports_soccer_rounded : Icons.home_repair_service_outlined,
-                          label: AppStrings.addService(role),
-                          hint: AppStrings.addServiceHint(role),
-                          onTap: _busy ? null : () => _addService(role),
-                        ),
-                      ],
                   ],
                 ),
               ),

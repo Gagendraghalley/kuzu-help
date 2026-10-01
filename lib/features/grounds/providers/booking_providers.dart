@@ -17,6 +17,15 @@ final myBookingsProvider = FutureProvider.autoDispose<List<GroundBooking>>((ref)
   return ref.watch(bookingRepositoryProvider).getMyBookings();
 });
 
+/// The customer's booking at [groundId] that isn't over yet, if any: until
+/// it is, they can't book that ground again (book_ground). Other grounds
+/// they can.
+final myCurrentBookingAtProvider = Provider.autoDispose.family<GroundBooking?, String>((ref, groundId) => ref
+    .watch(myBookingsProvider)
+    .valueOrNull
+    ?.where((b) => b.groundId == groundId && b.keepsGroundBooked())
+    .firstOrNull);
+
 /// A venue's bookings and blocked time, for its manager and admins.
 final venueBookingsProvider = FutureProvider.autoDispose.family<List<GroundBooking>, String>(
     (ref, venueId) => ref.watch(bookingRepositoryProvider).getVenueBookings(venueId));

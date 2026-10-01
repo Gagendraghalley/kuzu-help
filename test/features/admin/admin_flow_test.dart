@@ -117,12 +117,85 @@ void main() {
       expect(fakes.admin.activations.last, (userId: 'karma', active: true, reason: null));
     });
 
-    testWidgets('admins cannot be deactivated', (tester) async {
+    testWidgets('admins cannot be deactivated or deleted', (tester) async {
       await openUsers(tester);
 
       await tapAndSettle(tester, 'Tshering Admin');
       expect(find.text(AppStrings.adminsCantBeDeactivated), findsOneWidget);
       expect(find.text(AppStrings.deactivateAccount), findsNothing);
+      expect(find.text(AppStrings.deleteAccount), findsNothing);
+      expect(find.text(AppStrings.editRoles), findsNothing);
+    });
+
+    /// Ticks or unticks [role] in the Edit roles dialog.
+    Future<void> tapRole(WidgetTester tester, String role) async {
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text(AppStrings.roleLabel(role))));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('an admin gives a customer more roles; the main role follows', (tester) async {
+      final fakes = await openUsers(tester);
+
+      await tapAndSettle(tester, 'Karma Wangdi');
+      await tapAndSettle(tester, AppStrings.editRoles);
+      expect(find.text(AppStrings.rolesTitle('Karma Wangdi')), findsOneWidget);
+      expect(find.text(AppStrings.mainRoleNote(UserRole.customer)), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, AppStrings.save)).onPressed,
+          isNull); // nothing changed yet
+
+      await tapRole(tester, UserRole.player);
+      await tapRole(tester, UserRole.worker);
+      expect(find.text(AppStrings.mainRoleNote(UserRole.worker)), findsOneWidget);
+      await tapAndSettle(tester, AppStrings.save);
+
+      final change = fakes.admin.roleChanges.single;
+      expect(change.userId, 'karma');
+      expect(change.roles, {UserRole.customer, UserRole.player, UserRole.worker});
+      expect(find.text(AppStrings.rolesSaved('Karma Wangdi')), findsOneWidget);
+      expect(find.text(AppStrings.roleLabel(UserRole.worker)), findsOneWidget); // tag in the list
+    });
+
+    testWidgets('an account keeps at least one role', (tester) async {
+      await openUsers(tester);
+      await tapAndSettle(tester, 'Karma Wangdi');
+      await tapAndSettle(tester, AppStrings.editRoles);
+
+      await tapRole(tester, UserRole.customer); // untick the only one
+      expect(find.text(AppStrings.pickARole), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, AppStrings.save)).onPressed, isNull);
+    });
+
+    testWidgets("a ground manager's role is locked, and they can't be a worker too", (tester) async {
+      const dorji = Profile(id: 'dorji', fullName: 'Dorji Manager', role: UserRole.groundManager,
+          roles: [UserRole.groundManager, UserRole.customer]);
+      await pumpApp(tester, role: UserRole.admin, loggedIn: true, directory: directory(), users: [dorji]);
+      await tester.tap(find.byTooltip(AppStrings.settings));
+      await tester.pumpAndSettle();
+      await tapAndSettle(tester, AppStrings.users);
+      await tapAndSettle(tester, 'Dorji Manager');
+      await tapAndSettle(tester, AppStrings.editRoles);
+
+      expect(find.text(AppStrings.workerNotWithManager), findsOneWidget);
+      expect(find.text(AppStrings.roleHint(UserRole.groundManager)), findsOneWidget);
+      expect(find.text(AppStrings.mainRoleNote(UserRole.groundManager)), findsOneWidget);
+    });
+
+    testWidgets('an admin deletes a user after confirming; Cancel keeps them', (tester) async {
+      final fakes = await openUsers(tester);
+
+      await tapAndSettle(tester, 'Karma Wangdi');
+      await tapAndSettle(tester, AppStrings.deleteAccount);
+      expect(find.text(AppStrings.deleteUserTitle('Karma Wangdi')), findsOneWidget);
+      expect(find.text(AppStrings.deleteUserMessage(UserRole.customer)), findsOneWidget);
+      await tapAndSettle(tester, AppStrings.cancel);
+      expect(fakes.admin.deletedUsers, isEmpty);
+
+      await tapAndSettle(tester, AppStrings.deleteAccount);
+      await tapAndSettle(tester, AppStrings.deleteForGood);
+      expect(fakes.admin.deletedUsers, ['karma']);
+      expect(find.text(AppStrings.userDeleted('Karma Wangdi')), findsOneWidget);
+      expect(find.text('karma@example.com'), findsNothing); // gone from the list
+      expect(find.text('Tshering Admin'), findsOneWidget);
     });
 
     testWidgets("a worker is deactivated from their page's Admin check", (tester) async {

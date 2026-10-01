@@ -7,7 +7,7 @@
 -- =====================================================================
 --   1. Admins approve or reject workers from the app.
 --   2. Admins deactivate (blacklist) users.
---   3. Workers can switch to customer; sign-up and log-in check emails.
+--   3. New workers can go back to customer; sign-up and log-in check emails.
 --   4. What customers see in worker_directory, with all of the above.
 --   5. Notifications: each user's own list, under the bell.
 --   6. Admins read reports and mark them reviewed or closed in the app.
@@ -25,6 +25,8 @@
 --      (the same time every week), and keep a record of who books.
 --      Each venue can have its place on the map, for directions and how far away it is.
 --      New accounts made with 'Continue with Google' take the role picked on Welcome (13d).
+--      Admins change users' roles: customer, player and worker (13d).
+--      A customer has one booking of a ground at a time, until it's over (book_ground, 13d).
 -- The last line makes the app see the changes straight away.
 -- =====================================================================
 
@@ -177,10 +179,10 @@ alter policy "reviews: everyone reads" on public.reviews
 -- ---------------------------------------------------------------------
 -- 3. Switching roles, and checking emails
 -- ---------------------------------------------------------------------
--- D1 / B1 'Stop offering services', the reverse of become_worker(). Each
--- only changes that one role, so admins can never switch to customer or
--- worker. The worker profile is kept (hidden by section 4) in case they
--- offer services again.
+-- B1 'I only want to find workers', for someone who signed up as a worker
+-- by mistake: worker -> customer. It only changes that one role, so admins
+-- can never switch. The worker profile is kept (hidden by section 4) in
+-- case an admin makes them a worker again.
 create or replace function public.become_customer()
 returns void
 language sql
@@ -194,6 +196,11 @@ $$;
 
 revoke execute on function public.become_customer() from public, anon;
 grant execute on function public.become_customer() to authenticated;
+
+-- schema.sql's become_worker() ('Become a worker' in Settings) isn't for
+-- users any more: Settings has no role switching, so nobody gets confused.
+-- Roles come from signing up, and admins change them (set_user_roles, 13d).
+revoke execute on function public.become_worker() from public, anon, authenticated;
 
 -- A3: is there a confirmed account with this email? Callable before logging
 -- in, so sign-up can say 'already registered' (instead of quietly logging the
@@ -1935,7 +1942,7 @@ grant execute on function public.add_my_role(text) to authenticated;
 -- every new Google account a customer. Straight after, the app calls this
 -- to make it a 'worker' or 'player' instead. Only for an account made in
 -- the last 10 minutes that is still just a customer, so it can't be used
--- to change role later (Settings has 'Become a worker' for that).
+-- to change role later (admins do that: set_user_roles).
 create or replace function public.claim_signup_role(new_role text)
 returns void
 language plpgsql
@@ -1965,6 +1972,59 @@ $$;
 
 revoke execute on function public.claim_signup_role(text) from public, anon;
 grant execute on function public.claim_signup_role(text) to authenticated;
+
+-- Admins: Settings -> Users -> Edit roles. [new_roles] is every role the
+-- account should have: 'customer', 'player' and 'worker', and
+-- 'ground_manager' kept as it is (managers are chosen from Sports venues,
+-- set_venue_manager). The main role, the home the app opens, follows:
+-- ground manager or worker when there, else customer, else player. A
+-- worker who stops being one keeps their worker profile, hidden, as with
+-- become_customer. Admins' roles aren't changed here, and nobody becomes
+-- an admin: that stays in the SQL editor.
+create or replace function public.set_user_roles(target uuid, new_roles text[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  p public.profiles;
+  wanted text[] := array(select distinct r from unnest(coalesce(new_roles, '{}')) r);
+begin
+  if not public.is_admin() or not public.is_active_profile((select auth.uid())) then
+    raise exception 'Only admins can change roles' using errcode = '42501';
+  end if;
+  select * into p from public.profiles where id = target for update;
+  if not found then
+    raise exception 'No user with this ID' using errcode = 'P0002';
+  end if;
+  if p.role = 'admin' then
+    raise exception 'Admins'' roles can''t be changed here' using errcode = '42501';
+  end if;
+  if cardinality(wanted) = 0 or not wanted <@ array['customer', 'player', 'worker', 'ground_manager'] then
+    raise exception 'Roles are customer, player, worker and ground_manager; at least one' using errcode = '22023';
+  end if;
+  if ('ground_manager' = any(wanted)) <> (p.role = 'ground_manager') then
+    raise exception 'Ground managers are chosen from Sports venues' using errcode = '22023';
+  end if;
+  if 'ground_manager' = any(wanted) and 'worker' = any(wanted) then
+    raise exception 'A ground manager can''t be a worker too' using errcode = '22023';
+  end if;
+
+  update public.profiles
+  set role = case
+        when 'ground_manager' = any(wanted) then 'ground_manager'
+        when 'worker' = any(wanted) then 'worker'
+        when 'customer' = any(wanted) then 'customer'
+        else 'player'
+      end,
+      roles = wanted -- keep_profile_roles keeps the main role, customer and player
+  where id = target;
+end;
+$$;
+
+revoke execute on function public.set_user_roles(uuid, text[]) from public, anon;
+grant execute on function public.set_user_roles(uuid, text[]) to authenticated;
 
 -- Admins give a venue its manager: an account made by the
 -- create-venue-manager Edge Function, or one that already exists. [manager]
@@ -2152,9 +2212,12 @@ revoke execute on function public.ground_slot_price(uuid, timestamptz, int) from
 -- at [start_time] and lasts [hours] hours, up to a week ahead. The price
 -- (ground_slot_price) comes from the ground, not the app. Confirmed at once
 -- if the venue confirms automatically; otherwise pending, and a customer can
--- have 3 pending at most. [payment] is a payment_method value; [payment_ref]
--- the mBoB / mPay journal number, if they've paid an advance. Returns the
--- booking's ID. Postgres error 23P01: someone else has that time.
+-- have 3 pending at most. One booking of a ground at a time: a customer
+-- whose booking there (waiting or confirmed) hasn't ended yet books it again
+-- once it's over; other grounds they can book meanwhile. [payment] is a
+-- payment_method value; [payment_ref] the mBoB / mPay journal number, if
+-- they've paid an advance. Returns the booking's ID. Postgres error 23P01:
+-- someone else has that time; 23505: they have a booking here not yet over.
 create or replace function public.book_ground(
   ground uuid,
   start_time timestamptz,
@@ -2200,6 +2263,16 @@ begin
   total := public.ground_slot_price(ground, start_time, hours);
 
   perform public.expire_stale_ground_bookings(ground);
+  -- Two bookings sent at once by the same customer for this ground wait
+  -- for each other here, so the second sees the first.
+  perform pg_advisory_xact_lock(hashtextextended(me::text || ground::text, 0));
+  if exists (
+    select 1 from public.ground_bookings b
+    where b.ground_id = ground and b.booked_by = me and b.kind = 'customer'
+      and b.status in ('pending', 'confirmed') and b.ends_at > now()
+  ) then
+    raise exception 'You have a booking at this ground that isn''t over yet' using errcode = '23505';
+  end if;
   if not g.auto_confirm and (
     select count(*) from public.ground_bookings b
     where b.booked_by = me and b.status = 'pending' and b.starts_at > now()

@@ -179,9 +179,6 @@ class FakeProfileRepository implements ProfileRepository {
 
   // Like the database, these only change a customer or a worker; never an admin.
   @override
-  Future<void> becomeWorker() async => _switch(from: UserRole.customer, to: UserRole.worker);
-
-  @override
   Future<void> becomeCustomer() async => _switch(from: UserRole.worker, to: UserRole.customer);
 
   void _switch({required String from, required String to}) {
@@ -479,6 +476,36 @@ class FakeAdminRepository implements AdminRepository {
       );
     }
     _updateWorker(userId, isActive: active);
+  }
+
+  final roleChanges = <({String userId, Set<String> roles})>[];
+
+  /// Like set_user_roles: exactly [roles], and the main role follows.
+  @override
+  Future<void> setUserRoles(String userId, Set<String> roles) async {
+    roleChanges.add((userId: userId, roles: roles));
+    final i = users.indexWhere((u) => u.id == userId);
+    final u = users[i];
+    final main = UserRole.mainOf(roles);
+    users[i] = Profile(
+      id: u.id,
+      fullName: u.fullName,
+      role: main,
+      roles: [main, ...roles.where((r) => r != main)],
+      email: u.email,
+      isActive: u.isActive,
+      deactivatedReason: u.deactivatedReason,
+    );
+  }
+
+  final deletedUsers = <String>[];
+
+  /// Like delete-account: the account goes, and a worker leaves the directory.
+  @override
+  Future<void> deleteUser(String userId) async {
+    deletedUsers.add(userId);
+    users.removeWhere((u) => u.id == userId);
+    directory.workers.removeWhere((w) => w.id == userId);
   }
 
   void _updateWorker(String id, {String? status, bool? isActive}) {
@@ -929,6 +956,10 @@ class FakeBookingRepository implements BookingRepository {
     if (takeNextBooking || _overlaps(groundId, start, end)) {
       takeNextBooking = false;
       throw const PostgrestException(message: 'Someone else has just booked this time', code: '23P01');
+    }
+    // Like book_ground: one booking of a ground at a time, until it's over.
+    if (bookings.any((b) => b.groundId == groundId && b.bookedBy == me && b.keepsGroundBooked())) {
+      throw const PostgrestException(message: "You have a booking at this ground that isn't over yet", code: '23505');
     }
     booked.add((groundId: groundId, start: start, hours: hours, phone: phone, team: team, payment: payment));
     final ground = venues.grounds.firstWhere((g) => g.id == groundId);

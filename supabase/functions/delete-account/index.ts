@@ -1,21 +1,3 @@
-// Supabase Edge Function: delete-account
-// D1 'Delete account'. Deletes the calling user's files (their <id>/ folder
-// in each bucket), then their auth account. Linked rows (profile, worker
-// profile, services, documents, reviews, reports, notifications, work photos,
-// saved workers, job requests, ground bookings, venue reviews) are removed by
-// the ON DELETE CASCADE rules. A venue manager's venues stay, without a
-// manager, and so do the cover photos they uploaded (venue-photos is left
-// alone): they belong to the venue. venue-docs, for trade licences from the
-// first version of sports grounds, is cleaned only while it still exists.
-// Refused for admins (so there is always one) and for deactivated users
-// (so they can't sign up again to get round the block).
-//
-// Deploy (README, step 4): Supabase > Edge Functions > Deploy a new function
-// > Via Editor, name it delete-account, paste this file, Deploy. Or with the
-// Supabase CLI: supabase functions deploy delete-account
-// The service_role key is available to the function as an environment
-// variable on Supabase's servers - it is NEVER shipped in the Flutter app.
-
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const json = (body: unknown, status = 200) =>
@@ -43,8 +25,28 @@ Deno.serve(async (req) => {
     .eq("id", user.id)
     .maybeSingle();
   if (profileError) return json({ error: profileError.message }, 500);
-  if (profile?.role === "admin") return json({ error: "admins_cannot_delete" }, 403);
-  if (profile?.is_active === false) return json({ error: "deactivated" }, 403);
+
+  // Whose account: someone else's when an admin names them, else the caller's.
+  const body = await req.json().catch(() => ({}));
+  const named = typeof body?.user_id === "string" ? body.user_id : null;
+  let target = user.id;
+  if (named !== null && named !== user.id) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(named)) {
+      return json({ error: "user_id is not a user ID" }, 400);
+    }
+    if (profile?.role !== "admin" || profile.is_active === false) return json({ error: "admins_only" }, 403);
+    const { data: other, error: otherError } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", named)
+      .maybeSingle();
+    if (otherError) return json({ error: otherError.message }, 500);
+    if (other?.role === "admin") return json({ error: "admins_cannot_delete" }, 403);
+    target = named;
+  } else {
+    if (profile?.role === "admin") return json({ error: "admins_cannot_delete" }, 403);
+    if (profile?.is_active === false) return json({ error: "deactivated" }, 403);
+  }
 
   // Files are named <user-id>/<file> (lib/core/utils/storage_paths.dart).
   // Buckets that aren't there (venue-docs, once deleted) are skipped:
@@ -56,17 +58,17 @@ Deno.serve(async (req) => {
     if (!existing.has(bucket)) continue;
     const { data: files, error: listError } = await admin.storage
       .from(bucket)
-      .list(user.id, { limit: 1000 });
+      .list(target, { limit: 1000 });
     if (listError) return json({ error: listError.message }, 500);
     if (files.length > 0) {
       const { error: removeError } = await admin.storage
         .from(bucket)
-        .remove(files.map((file) => `${user.id}/${file.name}`));
+        .remove(files.map((file) => `${target}/${file.name}`));
       if (removeError) return json({ error: removeError.message }, 500);
     }
   }
 
-  const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
+  const { error: deleteError } = await admin.auth.admin.deleteUser(target);
   if (deleteError) return json({ error: deleteError.message }, 500);
 
   return json({ deleted: true });
