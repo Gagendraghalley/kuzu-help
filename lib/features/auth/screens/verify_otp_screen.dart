@@ -7,6 +7,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../shared/widgets/form_error.dart';
+import '../../../shared/widgets/info_note.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../providers/auth_providers.dart';
 import '../widgets/auth_scaffold.dart';
@@ -90,7 +91,8 @@ class _VerifyOtpScreenState extends ConsumerState<VerifyOtpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final email = ref.watch(otpRequestProvider)?.email ?? '';
+    final request = ref.watch(otpRequestProvider);
+    final email = request?.email ?? '';
 
     return AuthScaffold(
       icon: Icons.mark_email_read_outlined,
@@ -99,6 +101,11 @@ class _VerifyOtpScreenState extends ConsumerState<VerifyOtpScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Signing up with an email that has an account: this adds to it.
+          if (request != null && request.addsToAccount) ...[
+            InfoNote(icon: Icons.person_add_alt_1_outlined, text: AppStrings.addingToAccount(request.role!)),
+            const SizedBox(height: 16),
+          ],
           const SizedBox(height: 8),
           CodeBoxes(
             controller: _code,

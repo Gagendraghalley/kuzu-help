@@ -97,6 +97,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
   }
 
+  /// The services [profile] can add: sports grounds for anyone but admins
+  /// (who have everything), home services for players.
+  static List<String> _servicesToAdd(Profile profile) => [
+        if (!profile.hasRole(UserRole.player)) UserRole.player,
+        if (profile.role == UserRole.player && !profile.hasRole(UserRole.customer)) UserRole.customer,
+      ];
+
+  /// Uses another service with this account. A player who adds home
+  /// services has Customer Home from then on (with sports grounds too), so
+  /// the splash opens it.
+  Future<void> _addService(String role) async {
+    await _run(() async {
+      await ref.read(profileRepositoryProvider).addRole(role);
+      ref.invalidate(myProfileProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.serviceAdded(role))));
+      if (role == UserRole.customer) context.go(Routes.splash);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(myProfileProvider);
@@ -134,6 +154,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         icon: Icons.flag_outlined,
                         label: AppStrings.reports,
                         onTap: () => context.push(Routes.reports),
+                      ),
+                      const _Divider(),
+                      _Item(
+                        icon: Icons.stadium_outlined,
+                        label: AppStrings.sportsVenues,
+                        onTap: () => context.push(Routes.adminVenues),
                       ),
                     ],
                   ),
@@ -190,6 +216,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: _busy ? null : _becomeWorker,
                       ),
                     ],
+                    // Another service with the same log-in (role delegation).
+                    if (profile != null)
+                      for (final role in _servicesToAdd(profile)) ...[
+                        const _Divider(),
+                        _Item(
+                          icon: role == UserRole.player ? Icons.sports_soccer_rounded : Icons.home_repair_service_outlined,
+                          label: AppStrings.addService(role),
+                          hint: AppStrings.addServiceHint(role),
+                          onTap: _busy ? null : () => _addService(role),
+                        ),
+                      ],
                   ],
                 ),
               ),

@@ -113,7 +113,7 @@ class _UserTile extends StatelessWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                _RoleTag(role: user.role),
+                for (final role in user.allRoles) _RoleTag(role: role), // one per service they use
                 if (!user.isActive) const DeactivatedBadge(),
               ],
             ),
@@ -124,6 +124,7 @@ class _UserTile extends StatelessWidget {
           context: context,
           showDragHandle: true,
           isScrollControlled: true,
+          useSafeArea: true,
           builder: (_) => _UserActions(user: user),
         ),
       ),

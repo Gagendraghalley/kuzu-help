@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/router/start_route.dart';
 import '../../notifications/data/push_repository.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../profile/providers/profile_providers.dart';
 import '../../worker/data/worker_repository.dart';
 import '../data/auth_repository.dart';
 
@@ -14,23 +15,44 @@ import '../data/auth_repository.dart';
 // Screens watch these; these call the repositories.
 
 /// The role picked on Welcome (A2): UserRole.customer or UserRole.worker to
-/// sign up, or null for "Already have an account? Log in".
+/// sign up (UserRole.player from a ground), or null for "Already have an
+/// account? Log in".
 final chosenRoleProvider = StateProvider<String?>((ref) => null);
 
 /// What was sent from the login screen (A3), needed again to verify or resend (A4).
 final otpRequestProvider = StateProvider<OtpRequest?>((ref) => null);
+
+/// Where a visitor tapped 'Log in to book' (a ground's booking screen). Once
+/// they have logged in (and set a password, if new), the splash (A1) opens
+/// it over their home screen.
+final afterLoginRouteProvider = StateProvider<String?>((ref) => null);
 
 /// A1: the route to open when the app starts or the user logs in.
 final startRouteProvider = FutureProvider.autoDispose<String>((ref) async {
   final auth = ref.watch(authRepositoryProvider);
   if (!auth.isLoggedIn) return startRouteFor(null);
 
-  final profile = await ref.watch(profileRepositoryProvider).getMyProfile();
+  final profiles = ref.watch(profileRepositoryProvider);
+  var profile = await profiles.getMyProfile();
+  // An account without a profiles row (made before the database was set
+  // up, or its row went missing): make it now, as signing up would have.
   if (profile == null) {
-    throw StateError('No profiles row for this user. Has supabase/schema.sql been run?');
+    await profiles.ensureMyProfile();
+    profile = await profiles.getMyProfile();
+  }
+  if (profile == null) {
+    throw StateError('No profiles row for this user. Have supabase/schema.sql and updates.sql been run?');
   }
   // Blacklisted by an admin: nothing else, whatever else is unfinished.
   if (!profile.isActive) return Routes.deactivated;
+  // Signed up for another service with an email that has an account: now
+  // they've entered the code, that service is added to it (role delegation).
+  final request = ref.read(otpRequestProvider);
+  if (request != null && request.addsToAccount && !profile.hasRole(request.role!)) {
+    await profiles.addRole(request.role!);
+    ref.invalidate(myProfileProvider); // screens read the new roles
+    profile = (await profiles.getMyProfile())!;
+  }
   // A5 next: every new user, and anyone who has just used 'Forgot password?'.
   // Except admins (made in the SQL editor): they may log in with an email code
   // alone, and can set a password in Settings.
@@ -55,18 +77,22 @@ class AuthActions {
 
   /// A3: email a code, to sign up (a role was picked on Welcome; include the
   /// name) or, with no role, for 'Forgot password?'. A4 checks it.
-  /// Throws [AccountProblem.alreadyRegistered] for a sign-up with an email that
-  /// has an account: Supabase would just log them in, keeping their old role.
+  /// Signing up for home services or sports grounds with an email that has
+  /// an account is fine: the code logs them in, and the splash adds that
+  /// service to the account (UserRole.addable). Throws
+  /// [AccountProblem.alreadyRegistered] for a worker sign-up with such an
+  /// email: they log in and offer services from Settings.
   Future<void> sendCode({required String email, String? fullName}) async {
     final role = _ref.read(chosenRoleProvider);
+    final address = email.trim().toLowerCase();
+    final registered = role != null && await _repo.isEmailRegistered(address);
+    if (registered && !UserRole.addable.contains(role)) throw AccountProblem.alreadyRegistered;
     final request = OtpRequest(
-      email: email.trim().toLowerCase(),
-      fullName: role == null ? null : fullName?.trim(),
+      email: address,
+      fullName: role == null || registered ? null : fullName?.trim(),
       role: role,
+      addsToAccount: registered,
     );
-    if (role != null && await _repo.isEmailRegistered(request.email)) {
-      throw AccountProblem.alreadyRegistered;
-    }
     await _send(request);
     _ref.read(otpRequestProvider.notifier).state = request;
   }
@@ -111,13 +137,15 @@ class AuthActions {
 
   void _forgetCodeRequest() => _ref.read(otpRequestProvider.notifier).state = null;
 
-  Future<void> _send(OtpRequest request) =>
-      _repo.sendOtp(email: request.email, fullName: request.fullName, role: request.role);
+  /// For an account that exists, a plain log-in code: no new user.
+  Future<void> _send(OtpRequest request) => _repo.sendOtp(
+      email: request.email, fullName: request.fullName, role: request.addsToAccount ? null : request.role);
 }
 
 /// Sign-up and log-in problems the login screen (A3) explains itself.
 enum AccountProblem implements Exception {
-  /// Signing up with an email that already has an account: log in instead.
+  /// Signing up as a worker with an email that already has an account: log
+  /// in instead.
   alreadyRegistered,
 
   /// Logging in with an email no account uses: sign up instead.
@@ -130,7 +158,10 @@ class OtpRequest {
   final String? fullName;
   final String? role;
 
-  const OtpRequest({required this.email, this.fullName, this.role});
+  /// The email has an account: the code logs them in, then [role] is added to it.
+  final bool addsToAccount;
+
+  const OtpRequest({required this.email, this.fullName, this.role, this.addsToAccount = false});
 
   /// Codes without a role come from 'Forgot password?' and end on A5.
   bool get isPasswordReset => role == null;

@@ -110,6 +110,7 @@ class _ReportTile extends StatelessWidget {
           context: context,
           showDragHandle: true,
           isScrollControlled: true,
+          useSafeArea: true,
           builder: (_) => _ReportActions(report: report),
         ),
       ),

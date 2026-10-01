@@ -171,6 +171,9 @@ class _Dashboard extends ConsumerWidget {
               const Divider(indent: 70, endIndent: 16),
               link(Icons.visibility_outlined, AppStrings.seePublicProfile,
                   () => context.push(Routes.workerDetailsFor(worker.id))),
+              const Divider(indent: 70, endIndent: 16),
+              // Workers play too: the same grounds customers book from Customer Home.
+              link(Icons.sports_soccer_rounded, AppStrings.sportsGrounds, () => context.push(Routes.grounds)),
             ],
           ),
         ),

@@ -144,6 +144,7 @@ class _JobTile extends StatelessWidget {
           context: context,
           showDragHandle: true,
           isScrollControlled: true,
+          useSafeArea: true,
           builder: (_) => _JobDetails(job: job, asWorker: asWorker),
         ),
       ),

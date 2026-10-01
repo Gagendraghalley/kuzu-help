@@ -142,7 +142,37 @@ function text(data: Data, key: string, fallback: string): string {
 
 const starsLabel = (n: number) => (n === 1 ? "1 star" : `${n} stars`);
 
-const roleLabel = (role: string) => (role === "worker" ? "Worker" : role === "admin" ? "Admin" : "Customer");
+const roleLabel = (role: string) =>
+  ({ worker: "Worker", admin: "Admin", ground_manager: "Ground manager", player: "Player" } as Record<string, string>)[role] ??
+    "Customer";
+
+// Bookings are in Bhutan time (UTC+6 all year), like AppStrings.bookingTime.
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const hourLabel = (hour: number) => {
+  const h = hour % 24;
+  return `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "am" : "pm"}`;
+};
+const bhutan = (ms: number) => new Date(ms + 6 * 3600 * 1000); // read with getUTC*
+const dayLabel = (d: Date) => `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+
+/** 'Court A · Sat 4 Oct, 6 pm – 8 pm', as AppStrings._bookingNoticeTime. */
+function bookingTime(data: Data): string {
+  const startMs = Date.parse(str(data.starts_at) ?? "");
+  const hours = typeof data.hours === "number" ? data.hours : undefined;
+  const parts: string[] = [];
+  const ground = str(data.ground_name)?.trim();
+  if (ground) parts.push(ground);
+  if (!Number.isNaN(startMs) && hours !== undefined) {
+    const from = bhutan(startMs);
+    const to = bhutan(startMs + hours * 3600 * 1000);
+    const sameDay = dayLabel(from) === dayLabel(to) || (to.getUTCHours() === 0 && hours <= 24);
+    parts.push(sameDay
+      ? `${dayLabel(from)}, ${hourLabel(from.getUTCHours())} – ${hourLabel(to.getUTCHours())}`
+      : `${dayLabel(from)} ${hourLabel(from.getUTCHours())} – ${dayLabel(to)} ${hourLabel(to.getUTCHours())}`);
+  }
+  return parts.join(" · ");
+}
 
 const reportReason = (code: string) =>
   ({
@@ -177,6 +207,21 @@ export function pushTitle(type: string, data: Data): string {
       return data.by === "worker"
         ? `${text(data, "worker_name", "The worker")} marked your job as done`
         : `${text(data, "customer_name", "The customer")} marked the job as done`;
+    case "venue_assigned": return `You now run ${text(data, "venue_name", "a ground")}`;
+    case "booking_new":
+      return data.status === "confirmed"
+        ? `${text(data, "customer_name", "A customer")} booked ${text(data, "ground_name", "your ground")}`
+        : `New booking request from ${text(data, "customer_name", "a customer")}`;
+    case "booking_confirmed": return `${text(data, "venue_name", "The ground")} confirmed your booking`;
+    case "booking_rejected": return `${text(data, "venue_name", "The ground")} can't take your booking`;
+    case "booking_cancelled":
+      return data.by === "customer"
+        ? `${text(data, "customer_name", "A customer")} cancelled their booking`
+        : `${text(data, "venue_name", "The ground")} cancelled your booking`;
+    case "booking_expired": return `${text(data, "venue_name", "The ground")} didn't answer your request`;
+    case "booking_completed": return `How was ${text(data, "venue_name", "the ground")}?`;
+    case "venue_review_new": return `A customer rated your ground ${starsLabel(rating)}`;
+    case "venue_review_updated": return `A customer changed their rating of your ground to ${starsLabel(rating)}`;
     default: return "Kuzu Help";
   }
 }
@@ -187,6 +232,8 @@ export function pushBody(type: string, data: Data): string {
     case "welcome":
       return data.role === "worker"
         ? "Set up your worker profile. Our team checks it before customers can see you."
+        : data.role === "player"
+        ? "Find a sports ground near you, choose a free time and book it."
         : "Choose a service to find trusted local workers near you.";
     case "new_user": return str(data.email) ?? "";
     case "worker_submitted": return "They sent their documents. Tap to check them.";
@@ -214,6 +261,17 @@ export function pushBody(type: string, data: Data): string {
     case "job_accepted": return note || "They'll call you on the number you gave.";
     case "job_declined": return note || "Try another worker for this job.";
     case "job_completed": return data.by === "worker" ? "How did it go? Leave a review." : "";
+    case "venue_assigned": return "Answer its bookings, and keep its type, price and timings up to date here.";
+    case "booking_new":
+      return [bookingTime(data), data.status === "pending" ? "Tap to confirm or reject." : ""]
+        .filter((s) => s !== "").join(" · ");
+    case "booking_confirmed": return [bookingTime(data), note].filter((s) => s !== "").join(" · ");
+    case "booking_rejected": return note || "Try another time or ground.";
+    case "booking_cancelled": return data.by === "customer" || note === "" ? bookingTime(data) : note;
+    case "booking_expired": return "The request is cancelled, so the time is free again. Try another time or ground.";
+    case "booking_completed": return "Tap to leave a review.";
+    case "venue_review_new":
+    case "venue_review_updated": return "Tap to see your reviews.";
     default: return "";
   }
 }

@@ -1,4 +1,4 @@
-package bt.kuzuhelp.bhutan_services
+package bt.kuzuhelp.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

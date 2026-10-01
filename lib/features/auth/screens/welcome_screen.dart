@@ -13,7 +13,8 @@ import '../widgets/dzong_hero.dart';
 
 /// A2 Welcome
 /// Purpose: Logging in comes first, for everyone with an account; below it,
-/// new users choose customer or worker (that starts their sign-up).
+/// new users choose customer or worker (that starts their sign-up). Anyone can
+/// browse sports grounds without an account.
 /// Backend: None; remembers the chosen role for sign-up.
 /// Done when: Either button opens login with the role remembered.
 class WelcomeScreen extends ConsumerWidget {
@@ -100,6 +101,16 @@ class WelcomeScreen extends ConsumerWidget {
                               title: AppStrings.offerService,
                               hint: AppStrings.offerServiceHint,
                               onPressed: () => continueAs(UserRole.worker),
+                            ),
+                            const Divider(height: 44),
+                            // Sports grounds are open to everyone; booking asks them to log in.
+                            Text(AppStrings.lookingForGround, style: sectionLabel),
+                            const SizedBox(height: 12),
+                            _RoleButton(
+                              icon: Icons.sports_soccer_rounded,
+                              title: AppStrings.browseGrounds,
+                              hint: AppStrings.browseGroundsHint,
+                              onPressed: () => context.push(Routes.grounds),
                             ),
                           ],
                         ),

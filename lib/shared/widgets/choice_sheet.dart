@@ -16,6 +16,7 @@ Future<T?> showChoiceSheet<T>(
     showDragHandle: true,
     // Tall enough to show most of the 20 dzongkhags at once.
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (context) => SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.8),

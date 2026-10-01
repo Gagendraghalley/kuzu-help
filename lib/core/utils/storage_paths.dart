@@ -11,4 +11,6 @@ class StoragePaths {
   static String workPhoto(String userId) => '$userId/work_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
   static String jobPhoto(String userId) => '$userId/job_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+  static String venueCover(String userId) => '$userId/venue_${DateTime.now().millisecondsSinceEpoch}.jpg';
 }

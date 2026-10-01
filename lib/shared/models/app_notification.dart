@@ -22,6 +22,9 @@ class AppNotification {
   /// The worker it's about, for opening their page.
   String? get workerId => data['worker_id'] as String?;
 
+  /// The venue it's about (sports grounds), for opening it.
+  String? get venueId => data['venue_id'] as String?;
+
   AppNotification markedRead(DateTime at) =>
       AppNotification(id: id, type: type, data: data, createdAt: createdAt, readAt: readAt ?? at);
 

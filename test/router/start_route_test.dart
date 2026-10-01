@@ -12,6 +12,18 @@ void main() {
     expect(startRouteFor(null), Routes.welcome);
   });
 
+  test('ground managers go to their venue', () {
+    expect(startRouteFor(profile(UserRole.groundManager)), Routes.managerHome);
+  });
+
+  test('players go to their grounds; a customer who plays too, to Customer Home', () {
+    expect(startRouteFor(profile(UserRole.player)), Routes.playerHome);
+    expect(
+      startRouteFor(const Profile(id: 'user-1', fullName: 'Test', role: UserRole.customer, roles: [UserRole.player])),
+      Routes.customerHome,
+    );
+  });
+
   test('customers and admins go to Customer Home', () {
     expect(startRouteFor(profile(UserRole.customer)), Routes.customerHome);
     expect(startRouteFor(profile(UserRole.admin)), Routes.customerHome);

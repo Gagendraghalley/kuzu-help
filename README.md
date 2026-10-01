@@ -2,12 +2,33 @@
 
 Flutter + Supabase marketplace connecting customers with verified local workers.
 
+## About
+
+Kuzu Help is a mobile app for Android and iPhone that helps people in Bhutan find trusted
+local workers, such as plumbers, electricians, carpenters, appliance repairers, painters
+and masons, in their own dzongkhag. Customers choose a service and their dzongkhag, then
+see a list of workers with their ratings, prices and years of experience, and can show
+only the workers who are available now. On a worker's page they can read reviews, look at
+photos of past work, call or WhatsApp the worker directly, send a job request that says
+what needs doing, where and when, save the worker for later, and leave a review once they
+have been in touch. Workers sign up, set up a profile with the services they offer and
+their prices, and upload their CID and a certificate. An admin checks these documents and
+approves or rejects the worker, and only approved workers are shown to customers. Once
+approved, workers run everything from their dashboard: they switch their availability on
+or off, accept or decline job requests, reply to reviews and add up to 12 photos of their
+work. Admins also read the reports customers send about workers and can deactivate
+accounts that break the rules. Every important step, such as a new job request, an
+approval or a new review, sends an in-app notification and, once set up, a push
+notification to the person's phone, so customers, workers and admins always know what has
+changed.
+
 ## First-time setup
 
 1. Unzip this folder and open a terminal inside `bhutan_services/`.
 2. The Android and iOS platform folders are already generated with the organisation ID
-   `bt.kuzuhelp`: the app ID is `bt.kuzuhelp.bhutan_services` on Android and
-   `bt.kuzuhelp.bhutanServices` on iOS. These cannot be changed after publishing.
+   `bt.kuzuhelp`: the app ID is `bt.kuzuhelp.app` on Android (the package name registered
+   in the Google Play Console) and `bt.kuzuhelp.bhutanServices` on iOS. These cannot be
+   changed after publishing.
 
 3. Install packages:
 
@@ -79,14 +100,64 @@ Flutter + Supabase marketplace connecting customers with verified local workers.
    - **Dzongkha category names**: fill in `service_categories.name_dz` in the Table Editor
      and Customer Home shows it under the English name. The rest of the app is English
      until its text (all in `app_strings.dart`) is translated.
+   - **Sports grounds** (section 13): Customer Home offers three services: Home services
+     (the workers above), Sports grounds, and Party & dining (coming soon). An admin
+     registers each futsal or football ground together with its **ground manager**, the one
+     person who runs it (Settings → Sports grounds → Register a ground: the ground's details,
+     its type and price per hour, and the manager's name, email and phone, saved together;
+     the database makes all of them or none). The manager's account is made from their name
+     and email (the `create-venue-manager` Edge Function, below); to log in the first time
+     they tap 'Log in', then 'Forgot password?', get a code by email and choose a password.
+     From then on the app opens on their ground: once, they set its **timings** ('Set
+     timings'): for each day, Monday to Sunday, as many times as they like, e.g. Sunday
+     6–9 pm, 8–10 pm and 10 pm–12 am (a day with none is closed). Later they change them the
+     same way, and the type and price under 'Edit ground'. They answer booking requests (or
+     have them confirmed automatically); add a booking for someone who calls ('Add a
+     booking' on Bookings: confirmed at once, and everyone sees the time as booked); hold a
+     time every week for a team that always plays then ('Regular bookings', one day or more a
+     week, e.g. Tuesday and Friday, or 'Mark as regular' on a confirmed booking: the same
+     days and times every week until they edit or
+     remove it; everyone sees it as a regular booking, nobody else can book it); keep 'Booking records' of everyone who
+     has booked, with their phone, how often and when last; block time; mark bookings
+     played, no-show or paid; and pause bookings. Admins can do all of that for any ground, and change or remove its
+     manager; a ground without an active manager, or without timings, can't be booked.
+     Workers' and admins' accounts can't be ground managers. Customers pick a day, then one
+     of its times, and book the whole time, up to one week ahead (by phone too), in Bhutan time; the price is
+     its hours at the day price, or at the night price for hours from the time it starts (most grounds have one price all day). The database works out the price and refuses
+     a time that is taken, or runs into a taken one, even when two people book at once.
+     Requests the manager doesn't answer within 12 hours are cancelled and the time is free
+     again. Each step notifies the other person, and customers can review a ground once they
+     have played there. Sports grounds are public: from Welcome ('Browse sports grounds')
+     anyone can see grounds, prices, timings, reviews and which times are booked, on hold or
+     free, without an account; 'Create a free account to book' or 'I have an account: log
+     in' takes them there, then back to the ground. People who sign up from a ground are
+     **players** (role `player`), apart from customers, who use the home services; a
+     player's home is the grounds and their bookings. One email can use both services:
+     signing up for the other one with the same email (or 'Use this account for …' in
+     Settings, or on a ground's booking screen) adds that role to the account
+     (`profiles.roles`, `add_my_role`), and a customer who plays too keeps Customer Home,
+     which has sports grounds as well. Only accounts with the player role can book a
+     ground. Cover photos go in the public `venue-photos` bucket. Optional: to tell
+     customers about expired requests straight away, turn on pg_cron (Database → Extensions)
+     and run the `cron.schedule` line at the end of section 13 once.
+     Words: in the app, a venue (the place, e.g. Babesa Futsal Ground) is called a
+     **ground**. In the database it is a `venues` row with one `grounds` row (its type and
+     price) and that row's `ground_time_slots` (its timings).
+     Don't run the older 'Migration 02' draft: section 13 replaces it.
+
+   **Ground managers' accounts** (Register a venue, and Change manager on a venue): deploy `supabase/functions/create-venue-manager/` the same way as `delete-account`
+   below, named `create-venue-manager`. Only admins can call it. It makes the account
+   (already confirmed), or finds the one that uses the email, and the app then gives it
+   the venue.
 
    **Deleting accounts** (Settings → Delete account; Apple and Google require it for apps
    with sign-up): deploy the Edge Function in `supabase/functions/delete-account/`. In
    Supabase go to Edge Functions → Deploy a new function → Via Editor, name it
    `delete-account`, paste in `index.ts` and press Deploy (or, with the Supabase CLI,
    `supabase functions deploy delete-account`); deploy it again whenever `index.ts`
-   changes. It deletes the user's photos and documents in every bucket, then their account
-   and everything linked to it. Admins and deactivated users can't
+   changes (so does `send-push`, for the booking notifications). It deletes the user's
+   photos and documents in every bucket, then their account and everything linked to
+   it; a ground manager's venues stay, without a manager. Admins and deactivated users can't
    delete their account (deactivated users could otherwise sign up again).
 
 5. Copy `config/dev.example.json` to `config/dev.json` and fill in your Supabase
@@ -106,7 +177,7 @@ this is set up, the app works exactly as before (the bell only). Each piece chec
 setup, so you can do the steps in any order; pushes start once all are done.
 
 1. **Firebase** (free): create a project at console.firebase.google.com, then *Add app →
-   Android* with the package name `bt.kuzuhelp.bhutan_services`. Download its
+   Android* with the package name `bt.kuzuhelp.app`. Download its
    `google-services.json` (you only read values from it; don't add it to the project or
    to git) and copy four values into `config/dev.json`:
 
@@ -172,6 +243,24 @@ It needs a paid Apple Developer team (this project uses team `6E2JNTTC36`), and:
    Runner → Signing & Capabilities. (Recent simulators on Apple silicon Macs can receive
    pushes too, but a real phone is the dependable test.)
 
+## Android release build (Google Play)
+
+Release builds are signed with the upload key named in `android/key.properties`
+(gitignored), which points to a keystore kept outside the project. **Back up both the
+keystore and `key.properties`**: every Play Store update must be signed with this key.
+Without `key.properties`, release builds fall back to the debug key, which Play rejects.
+
+Raise `version:` in `pubspec.yaml` before each upload (the number after `+` must go up
+every time), then:
+
+```
+flutter build appbundle --release --dart-define-from-file=config/dev.json
+```
+
+Upload `build/app/outputs/bundle/release/app-release.aab` in the Play Console. To install
+on a phone directly instead, build an APK with `flutter build apk --release` and the same
+`--dart-define-from-file`.
+
 ## Platform settings to add after step 2
 
 **android/app/src/main/AndroidManifest.xml**
@@ -193,11 +282,12 @@ It needs a paid Apple Developer team (this project uses team `6E2JNTTC36`), and:
 | `lib/features/worker` | B1–B5: profile setup, services, verification, pending, dashboard; photos of work |
 | `lib/features/customer` | C1–C5: home, worker list, details, review, report; search by name, saved workers |
 | `lib/features/jobs` | Job requests: the request form, and the list both sides answer from |
+| `lib/features/grounds` | Sports grounds: venues, booking a ground, My bookings, venue reviews; the ground manager's home, grounds, bookings and blocked time |
 | `lib/features/profile` | D1: settings, edit profile, change password, logout, delete account |
-| `lib/features/admin` | Workers awaiting approval, Users, Reports, and the 'Admin check' card (approve, reject, deactivate) |
+| `lib/features/admin` | Workers awaiting approval, Sports venues, Users, Reports, and the 'Admin check' card (approve, reject, deactivate) |
 | `lib/features/notifications` | The bell (unread count) and the Notifications screen |
 | `lib/shared` | Models and reusable widgets |
-| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the Edge Functions: delete-account (Settings → Delete account) and send-push (push notifications) |
+| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the Edge Functions: delete-account (Settings → Delete account), send-push (push notifications) and create-venue-manager (ground managers' accounts) |
 
 Each feature has `screens/` (display only), `providers/` (Riverpod state) and
 `data/` (the only files that talk to Supabase).

@@ -109,8 +109,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  /// 'New to Kuzu Help?': back to Welcome to choose how they'll use it.
-  void _createAccount() => context.canPop() ? context.pop() : context.go(Routes.welcome);
+  /// 'New to Kuzu Help?': back to Welcome to choose how they'll use it; on
+  /// the way to booking a ground, straight to signing up as a player.
+  void _createAccount() {
+    if (ref.read(afterLoginRouteProvider) != null) return _switchTo(role: UserRole.player);
+    context.canPop() ? context.pop() : context.go(Routes.welcome);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +126,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       icon: switch (role) {
         null => null,
         UserRole.worker => Icons.handyman_outlined,
+        UserRole.player => Icons.sports_soccer_rounded,
         _ => Icons.search_rounded,
       },
       pill: role == null ? null : AppStrings.signingUpAs(role),

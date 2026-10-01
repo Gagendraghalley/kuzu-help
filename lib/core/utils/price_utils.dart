@@ -1,6 +1,13 @@
 class PriceUtils {
   static const currency = 'Nu';
 
+  /// Whole Ngultrum, as grounds are priced: 1500 shows as 'Nu 1,500'.
+  static String nu(int amount) {
+    final digits = amount.abs().toString();
+    final grouped = digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+    return '$currency ${amount < 0 ? '-' : ''}$grouped';
+  }
+
   // Already says which money: Nu, Ngultrum, BTN, rupees and so on.
   static final _namesCurrency =
       RegExp(r'\b(nu|ngultrum|btn|rs|rupees?|inr|usd)\b|[₹$]', caseSensitive: false);

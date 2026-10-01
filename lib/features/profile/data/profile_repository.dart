@@ -21,6 +21,12 @@ class ProfileRepository {
     return row == null ? null : Profile.fromJson(row);
   }
 
+  /// Makes the logged-in user's profiles row if their account has none, as
+  /// signing up would have (ensure_my_profile); nothing when it's there.
+  Future<void> ensureMyProfile() async {
+    await _db.rpc('ensure_my_profile');
+  }
+
   /// D1 and B1: name, photo and location, the only columns users may change.
   /// [photo] is a new JPEG, when one was picked.
   Future<void> updateProfile({
@@ -46,6 +52,14 @@ class ProfileRepository {
     final bucket = _db.storage.from(Buckets.avatars);
     await bucket.uploadBinary(path, photo, fileOptions: const FileOptions(contentType: 'image/jpeg'));
     return bucket.getPublicUrl(path);
+  }
+
+  /// Uses another service with this account: [role] is UserRole.player
+  /// (sports grounds) or UserRole.customer (home services), added to the
+  /// ones it has (add_my_role). A player who adds home services has Customer
+  /// Home from then on.
+  Future<void> addRole(String role) async {
+    await _db.rpc('add_my_role', params: {'new_role': role});
   }
 
   /// D1 'Become a worker': customer -> worker only (schema.sql, section 4).

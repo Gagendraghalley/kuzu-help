@@ -2,7 +2,11 @@
 // D1 'Delete account'. Deletes the calling user's files (their <id>/ folder
 // in each bucket), then their auth account. Linked rows (profile, worker
 // profile, services, documents, reviews, reports, notifications, work photos,
-// saved workers, job requests) are removed by the ON DELETE CASCADE rules.
+// saved workers, job requests, ground bookings, venue reviews) are removed by
+// the ON DELETE CASCADE rules. A venue manager's venues stay, without a
+// manager, and so do the cover photos they uploaded (venue-photos is left
+// alone): they belong to the venue. venue-docs, for trade licences from the
+// first version of sports grounds, is cleaned only while it still exists.
 // Refused for admins (so there is always one) and for deactivated users
 // (so they can't sign up again to get round the block).
 //
@@ -43,7 +47,13 @@ Deno.serve(async (req) => {
   if (profile?.is_active === false) return json({ error: "deactivated" }, 403);
 
   // Files are named <user-id>/<file> (lib/core/utils/storage_paths.dart).
-  for (const bucket of ["avatars", "verification-docs", "work-photos", "job-photos"]) {
+  // Buckets that aren't there (venue-docs, once deleted) are skipped:
+  // listing one would fail and stop the deletion.
+  const { data: buckets, error: bucketsError } = await admin.storage.listBuckets();
+  if (bucketsError) return json({ error: bucketsError.message }, 500);
+  const existing = new Set(buckets.map((b: { id: string }) => b.id));
+  for (const bucket of ["avatars", "verification-docs", "work-photos", "job-photos", "venue-docs"]) {
+    if (!existing.has(bucket)) continue;
     const { data: files, error: listError } = await admin.storage
       .from(bucket)
       .list(user.id, { limit: 1000 });

@@ -1,4 +1,6 @@
 import '../constants/app_constants.dart';
+import '../utils/bhutan_time.dart';
+import '../utils/price_utils.dart';
 
 /// ALL display text lives here so Dzongkha can be added later
 /// without rewriting screens.
@@ -13,6 +15,9 @@ class AppStrings {
   static const offerServiceHint = 'Get more customers for your skills';
   static const newToKuzuHelp = 'New to Kuzu Help? Create a free account:';
   static const alreadyHaveAccount = 'Already have an account?';
+  static const lookingForGround = 'Looking for a ground to play?';
+  static const browseGrounds = 'Browse sports grounds';
+  static const browseGroundsHint = 'See grounds, prices and free times. No account needed.';
 
   // Login (A3, A4, A5)
   static const signUpTitle = 'Create your account';
@@ -36,9 +41,11 @@ class AppStrings {
   static const sendingCode = 'Sending code…';
   static const wrongPassword =
       "Wrong email or password. If you haven't set a password yet, tap 'Forgot password?'.";
-  static String signingUpAs(String role) => role == UserRole.worker
-      ? 'You are signing up to offer your services.'
-      : 'You are signing up to find workers.';
+  static String signingUpAs(String role) => switch (role) {
+        UserRole.worker => 'You are signing up to offer your services.',
+        UserRole.player => 'You are signing up to book sports grounds.',
+        _ => 'You are signing up to find workers.',
+      };
   static const newHereCreateAccount = 'New to Kuzu Help? Create an account';
   static const alreadyRegisteredTitle = 'This email is already registered';
   static const alreadyRegisteredHelp = 'Log in with this email and your password instead. '
@@ -410,14 +417,402 @@ class AppStrings {
         _ => 'Marked as done.',
       };
 
+  // C1 Customer home: the three services
+  static const homeServices = 'Home services';
+  static const sportsGrounds = 'Sports grounds';
+  static const partyDining = 'Party & dining';
+  static const comingSoon = 'Soon';
+  static const bookAGround = 'Book a futsal or football ground near you';
+  static const planAParty = 'Plan a farewell, birthday or office party';
+  static const partyComingSoon = 'Coming soon: book restaurants and bars for farewells, birthdays, '
+      'office parties and more, right here in Kuzu Help.';
+
+  // Sports grounds: finding one
+  static const allSports = 'All sports';
+  static String sportLabel(String sport) => switch (sport) {
+        Sport.futsal => 'Futsal',
+        Sport.football => 'Football',
+        Sport.basketball => 'Basketball',
+        Sport.badminton => 'Badminton',
+        _ => 'Other',
+      };
+  static String noVenuesYet({required bool everywhere}) => everywhere
+      ? 'No sports grounds yet – check back soon'
+      : 'No sports grounds in this area yet – check back soon';
+  static String noVenuesForSport(String sport) =>
+      'No ${sportLabel(sport).toLowerCase()} grounds here yet. Try "$allSports".';
+  static String fromPricePerHour(int price) => 'From ${PriceUtils.nu(price)} an hour';
+  static const instantBooking = 'Instant booking';
+  static const myBookings = 'My bookings';
+  static const venuesCheckedNote = 'Every ground is checked by our team before it appears here.';
+
+  // Sports grounds: a venue's page
+  static const venueNotListed = 'This ground is not taking bookings right now.';
+  static const book = 'Book';
+  static String groundPrice(int price, {int? eveningPrice, required int eveningFrom}) => [
+        '${PriceUtils.nu(price)} an hour',
+        if (eveningPrice != null) '${PriceUtils.nu(eveningPrice)} an hour at night, from ${hourLabel(eveningFrom)}',
+      ].join(' · ');
+  static const everyDay = 'Every day';
+  /// 'Mon', or 'Mon – Fri' (0 = Sunday).
+  static String weekdays(int from, int to) =>
+      from == to ? weekdayName(from) : '${weekdayName(from)} – ${weekdayName(to)}';
+  static String hoursRange(int openHour, int closeHour) => '${hourLabel(openHour)} – ${hourLabel(closeHour)}';
+  static const indoor = 'Indoor';
+  static const outdoor = 'Outdoor';
+  static const floodlights = 'Floodlights';
+  static const cancelling = 'Cancelling';
+  static String freeCancelNote(int hours) => hours == 0
+      ? 'You can cancel for free until your booking starts.'
+      : 'You can cancel for free up to ${hours == 1 ? '1 hour' : '$hours hours'} before your booking starts.';
+  static const confirmedAtOnce = 'This ground confirms bookings at once.';
+  static const confirmedByVenue = 'The ground manager confirms each booking, usually within a few hours. '
+      "Requests they don't answer in 12 hours are cancelled, so the time is free again.";
+  static const yourPublicVenue = 'This is how customers see your ground.';
+  static const reviewVenueAfterPlaying = 'You can review this ground after you have played there.';
+  static const noVenueReviews = 'No reviews yet.';
+  static const howWasTheGround = 'How was the ground?';
+  static const venueReviewCommentHint = 'Was the ground good? Was it ready on time? Would you play there again?';
+
+  // Sports grounds: booking
+  static const bookGround = 'Book a time';
+  static const chooseDay = 'Choose a day';
+  static const bookUpToAWeek = 'You can book up to one week ahead.';
+  static const today = 'Today';
+  static const tomorrow = 'Tomorrow';
+  static const chooseTime = 'Choose a time';
+  static const closedThisDay = 'The ground has no times on this day. Please choose another.';
+  static const noFreeTimes = 'No free times left on this day. Please choose another day.';
+  /// A time someone has: '6 pm – 8 pm · Booked' once the ground manager has
+  /// confirmed it, '· On hold' while it waits for their answer, '· Not
+  /// available' when it runs into another booking or the manager closed it.
+  static String takenSlot(int startHour, int endHour, {required bool exact, required bool confirmed, bool regular = false}) =>
+      '${hoursRange(startHour, endHour)} · '
+      '${!exact ? 'Not available' : regular ? regularBooking : confirmed ? 'Booked' : 'On hold'}';
+  static const takenTimesNote = 'Booked: confirmed by the ground manager. Regular booking: the same team plays '
+      "then every week. On hold: someone has asked for it and is waiting for the manager's answer. Not "
+      'available: it runs into a booked time, or the manager has closed it.';
+  static const createAccountToBook = 'Create a free account to book';
+  static const logInToBook = 'I have an account: log in';
+  static const logInToBookNote = 'First time here? Create a free account with your name and email: we send a '
+      "code to your email, then you choose a password. You'll come straight back here to book.";
+  static const chooseATime = 'Please choose a time';
+  static const yourBooking = 'Your booking';
+  static const teamName = 'Team name (optional)';
+  static const teamNameHint = 'e.g. Changzamtog FC';
+  static const playersCount = 'Number of players (optional)';
+  static const invalidPlayers = 'Please enter a number from 1 to 30';
+  static const howWillYouPay = 'How will you pay?';
+  static String paymentLabel(String method) => switch (method) {
+        PaymentMethod.mbob => 'mBoB transfer',
+        PaymentMethod.mpay => 'mPay transfer',
+        _ => 'Pay at the ground',
+      };
+  static const howToPayVenue = 'How to pay this ground';
+  static const askVenueHowToPay = 'Ask the ground manager where to send the money.';
+  static const journalNumber = 'Journal number (optional)';
+  static const journalNumberHint = 'From your receipt, once you have paid';
+  static const bookingNote = 'Message for the ground manager (optional)';
+  static const bookingNoteHint = 'e.g. We need bibs for 10 players.';
+  static const sendBookingRequest = 'Send booking request';
+  static String bookFor(int price) => 'Book for ${PriceUtils.nu(price)}';
+  static const bookingRequestSent = "Booking request sent. We'll let you know when the ground manager answers.";
+  static const bookedNow = 'Booked! You can find it under My bookings.';
+  static const slotTaken = 'Sorry, someone has just booked this time. Please choose another.';
+  static const tooManyWaiting =
+      'You have 3 bookings waiting for an answer. Wait for a ground to reply, or cancel one, then book again.';
+  static const groundNotBookable = "This ground isn't taking bookings right now.";
+  static const timeNotBookable = "This time can't be booked. Please choose another.";
+  static const ownGround = 'This is your own ground. Block the time from your bookings instead.';
+
+  // Sports grounds: My bookings (customers)
+  static const upcoming = 'Upcoming';
+  static const past = 'Past';
+  static String noBookings({required bool upcoming}) =>
+      upcoming ? 'No bookings yet. Choose a sports ground and book a time.' : 'Nothing here yet.';
+  /// [expired]: cancelled because the ground manager didn't answer in time.
+  static String bookingStatusLabel(String status, {bool expired = false}) => switch (status) {
+        BookingStatus.confirmed => 'Confirmed',
+        BookingStatus.rejected => 'Not accepted',
+        BookingStatus.cancelled when expired => 'Expired',
+        BookingStatus.cancelled => 'Cancelled',
+        BookingStatus.completed => 'Played',
+        BookingStatus.noShow => 'No-show',
+        _ => 'Waiting for the ground',
+      };
+  static String paymentStatusLabel(String status) => switch (status) {
+        PaymentStatus.depositClaimed => 'Advance sent',
+        PaymentStatus.paid => 'Paid',
+        _ => 'Not paid yet',
+      };
+  static const messageFromVenue = 'Message from the ground';
+  static const whenLabel = 'When';
+  static const whereLabel = 'Where';
+  static const priceLabel = 'Price';
+  static const paymentTitle = 'Payment';
+  static const teamLabel = 'Team';
+  static const playersLabel = 'Players';
+  static const noteLabel = 'Note';
+  static const cancelBooking = 'Cancel booking';
+  static const cancelBookingTitle = 'Cancel this booking?';
+  static String lateCancelWarning(int hours) =>
+      'Free cancellation ended ${hours == 1 ? '1 hour' : '$hours hours'} before the start. '
+      'The ground may still ask you to pay.';
+  static const addJournalNumber = 'Add journal number';
+  static const journalNumberTitle = 'Journal number of your payment';
+  static const journalNumberSaved = 'Saved. The ground manager can see it.';
+  static const enterJournalNumber = 'Please enter the journal number';
+  static const openVenuePage = 'Open ground page';
+
+  // Sports grounds: running a venue (its manager, and admins)
+  static const myVenues = 'My grounds';
+  static const noVenueToManage =
+      "You don't run a ground at the moment. The Kuzu Help team adds you to the ground you run.";
+  static const addVenue = 'Register a ground';
+  static const registerVenue = 'Register ground';
+  static const editVenue = 'Edit ground';
+  static const venueName = 'Ground name';
+  static const venueNameHint = 'e.g. Changlimithang Futsal Arena';
+  static const enterVenueName = 'Please enter the name of the ground';
+  static const venueAddress = 'Address or landmark (optional)';
+  static const venueAddressHint = 'e.g. Behind the Changlimithang stadium';
+  static const venuePhone = 'Phone for bookings';
+  static const venueWhatsapp = 'WhatsApp number (optional)';
+  static const venueAbout = 'About the ground (optional)';
+  static const venueAboutHint = 'e.g. Two covered futsal courts, with changing rooms and parking.';
+  static const coverPhoto = 'Cover photo (optional)';
+  static const coverPhotoHint = 'A clear photo of your ground helps customers choose it.';
+  static const autoConfirm = 'Confirm bookings automatically';
+  static const autoConfirmHint = 'Customers are booked at once. Turn off to accept or reject each request.';
+  static const freeCancellation = 'Free cancellation';
+  static String freeCancelOption(int hours) =>
+      hours == 0 ? 'Until the booking starts' : 'Up to ${hours == 1 ? '1 hour' : '$hours hours'} before';
+  static const cancellationRules = 'Cancellation rules (optional)';
+  static const cancellationRulesHint = 'e.g. Late cancellations pay half the price.';
+  static const paymentInfo = 'How to pay an advance (optional)';
+  static const paymentInfoHint = 'e.g. mBoB 200123456 (Tashi Futsal)';
+  static String venueRegistered(String venue, String manager, String email, {required bool created}) => created
+      ? '$venue is registered, and $manager runs it. They log in with $email and "$forgotPassword" the first time.'
+      : '$venue is registered, and $manager runs it. They are told in the app.';
+  static const venueSaved = 'The ground is saved';
+  static String venueStatusLabel({required bool active, required bool hasManager}) =>
+      !hasManager ? 'No manager yet' : active ? 'Taking bookings' : 'Paused';
+  static const takingBookings = 'Taking bookings';
+  static const takingBookingsHint = 'Customers can find and book this ground.';
+  static const pausedHint = "Paused: customers can't see this ground or book it.";
+  static const notVisibleYet = 'Not visible yet';
+  static const notVisibleNoGrounds =
+      "Customers and visitors can't see this ground yet: add its type, price and timings, and it appears.";
+  static const timings = 'Timings';
+  static const noTimingsYet = "No timings yet: customers can't book until you add them.";
+  static const typeAndPriceFirst = "First add the ground's type and price, then its timings.";
+  static const addTypeAndPrice = 'Add type and price';
+  static const setTimings = 'Set timings';
+  static const timingsHint = 'Add the times people can book on each day, Monday to Sunday: as many as you like, '
+      'e.g. 6 pm – 8 pm and 8 pm – 10 pm. A day with no times is closed. Customers book one whole time.';
+  static const addTime = 'Add a time';
+  static const removeTime = 'Remove this time';
+  static const copyMondayToAll = "Copy Monday's times to every day";
+  static const saveTimings = 'Save timings';
+  static const timingsSaved = "Timings saved. Everyone sees them on your ground's page.";
+  static const bookings = 'Bookings';
+  static String requestsToAnswer(int n) =>
+      n == 0 ? 'No new requests' : n == 1 ? '1 request to answer' : '$n requests to answer';
+  static const seePublicVenue = 'View my public page';
+  static const typeAndPrice = 'Type and price';
+  static const sport = 'Type of ground';
+  static const groundFormat = 'Format (optional)';
+  static const groundFormatHint = 'e.g. 5-a-side';
+  static const groundSurface = 'Surface (optional)';
+  static const groundSurfaceHint = 'e.g. Artificial turf';
+  static const indoorLabel = 'Indoor (covered)';
+  static const floodlightsLabel = 'Floodlights for evening games';
+  static const pricePerHour = 'Price per hour';
+  static const nightPriceLabel = 'Different price at night';
+  static const nightPriceHint = 'e.g. more when the floodlights are on. Off: the same price all day.';
+  static const eveningPrice = 'Night price per hour';
+  static const eveningFrom = 'Night price starts at';
+  static const enterPrice = 'Please enter the price in Ngultrum';
+  static const closed = 'Closed';
+  static const addAtLeastOneTime = 'Please add at least one time';
+  static const paused = 'Paused';
+  static String weekdayName(int weekday) => const ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][weekday];
+
+  // Sports grounds: a venue's bookings, for its manager
+  static const requests = 'Requests';
+  static String noVenueBookings(String tab) => switch (tab) {
+        requests => 'No requests waiting. New ones show here and under the bell.',
+        upcoming => 'No upcoming bookings.',
+        _ => 'Nothing here yet.',
+      };
+  static String blockedFor(String? reason) =>
+      reason == null || reason.trim().isEmpty ? 'Blocked' : 'Blocked: ${reason.trim()}';
+  static String bookedBy(String name) => name.isEmpty ? 'A customer' : name;
+  static const messageFromCustomer = 'Message from the customer';
+  static const yourMessage = 'Your message';
+  static const confirmBooking = 'Confirm';
+  static const rejectBooking = 'Reject';
+  static const confirmBookingTitle = 'Confirm this booking?';
+  static const confirmBookingHint = 'Message for the customer (optional), e.g. Please come 10 minutes early.';
+  static const rejectBookingTitle = 'Reject this booking?';
+  static const rejectBookingHint = 'Reason (optional), e.g. The ground is closed for repairs that day.';
+  static const cancelBookingVenueHint = 'Reason for the customer (optional), e.g. Heavy rain has flooded the ground.';
+  static const markPlayed = 'Mark as played';
+  static const markNoShow = "They didn't come";
+  static const markPaid = 'Mark as paid';
+  static const markNotPaid = 'Mark as not paid';
+  static const removeBlock = 'Remove block';
+  static const removeBlockTitle = 'Remove this block?';
+  static String bookingStatusChanged(String status, {bool byOwner = false}) => switch (status) {
+        BookingStatus.confirmed => 'Confirmed. The customer is told.',
+        BookingStatus.rejected => 'Rejected. The customer is told.',
+        BookingStatus.cancelled => byOwner ? 'Cancelled. The customer is told.' : 'Booking cancelled. The ground is told.',
+        BookingStatus.completed => 'Marked as played.',
+        _ => 'Marked as a no-show.',
+      };
+  static String paymentChanged({required bool paid}) => paid ? 'Marked as paid.' : 'Marked as not paid.';
+  static const addBooking = 'Add a booking';
+  static const regularBooking = 'Regular booking';
+  static const regularBookings = 'Regular bookings';
+  static const addRegularBooking = 'Add a regular booking';
+  static const everyWeek = 'Mark as regular';
+  static String everyWeekHint(int weekday) => 'Held every ${weekdayName(weekday)} at this time, until you edit or '
+      'remove it. Everyone sees it as a regular booking, and nobody else can book it.';
+  static String everyWeekday(int weekday, int startHour, int endHour) =>
+      'Every ${weekdayName(weekday)}, ${hoursRange(startHour, endHour)}';
+  static const regularTimesHint = 'Held every week at the times you choose, on one day or more, until you edit or '
+      'remove them. Everyone sees them as regular bookings, and nobody else can book them.';
+  static const regularMoreDays = 'Plays more than once a week? Choose another day and tap its time too.';
+  /// 'Add a regular booking', or 'Add 2 regular bookings' for [n] times at once.
+  static String addRegularBookings(int n) => n <= 1 ? addRegularBooking : 'Add $n regular bookings';
+  static String regularAdded(int weekday, int startHour, int endHour) =>
+      'Regular booking added: ${everyWeekday(weekday, startHour, endHour).toLowerCase()}.';
+  /// [times]: each one's everyWeekday.
+  static String regularsAdded(List<String> times) =>
+      'Regular bookings added: ${times.map((t) => t.toLowerCase()).join(' and ')}.';
+  static const regularClash =
+      'This time is taken, by another regular booking or a booking in the week ahead. Cancel that booking first, '
+      'or choose another time.';
+  static const regularNotATime = "This time isn't one of the ground's timings any more. Add it under Timings first.";
+  static const noRegularBookings = 'None yet. For a team that plays at the same time every week: the time is held '
+      'for them every week until you edit or remove it. You can also open a booking and mark it as regular.';
+  static const markRegular = 'Mark as regular';
+  static const markRegularTitle = 'Make this a regular booking?';
+  static String markRegularMessage(String name, int weekday, int startHour, int endHour) =>
+      '${bookedBy(name)} gets ${everyWeekday(weekday, startHour, endHour).toLowerCase()}, every week from now on, '
+      'until you edit or remove it. Everyone sees it as a regular booking, and nobody else can book it.';
+  static const editRegular = 'Edit';
+  static const editRegularTitle = 'Edit regular booking';
+  static const saveRegular = 'Save';
+  static String regularSaved(int weekday, int startHour, int endHour) =>
+      'Regular booking saved: ${everyWeekday(weekday, startHour, endHour).toLowerCase()}.';
+  static const stopRegular = 'Remove regular booking';
+  static const stopRegularTitle = 'Remove this regular booking?';
+  static const stopRegularMessage = "The time is free for everyone to book again. They aren't told in the app.";
+  static const regularStopped = 'Regular booking removed. The time is free again.';
+  static const regular = 'Regular';
+  static const bookingRecords = 'Booking records';
+  static const bookingRecordsHint = 'Everyone who has booked, in the app, by phone or every week.';
+  static const noBookingRecords = 'No one has booked yet. Everyone who books, in the app or by phone, shows here.';
+  static String timesBooked(int n) => n == 1 ? 'Booked once' : 'Booked $n times';
+  static String lastBooked(DateTime start) => 'Last: ${dayLabel(BhutanTime.dayOf(start))}';
+  static const phoneBookingHint = "For someone who called you. It's confirmed at once, and everyone sees the "
+      "time as Booked. They aren't told in the app.";
+  static const callerName = 'Their name';
+  static const enterCallerName = 'Please enter their name';
+  static const callerPhone = 'Their mobile number (optional)';
+  static const bookThisTime = 'Book this time';
+  static const phoneBooked = 'Booked. Everyone sees this time as booked.';
+  static const byPhone = 'By phone';
+  static const cancelPhoneBookingMessage = "The time is free again. They aren't told in the app, so please let "
+      'them know.';
+  static const phoneBookingCancelled = 'Cancelled. The time is free again.';
+  static const blockTime = 'Block time';
+  static const blockTimeHint = "Customers can't book blocked time: for repairs, a tournament or a private event.";
+  static const blockDay = 'Day';
+  static const blockFrom = 'From';
+  static const blockUntil = 'Until';
+  static const blockReason = 'Reason (optional)';
+  static const blockReasonHint = 'e.g. Tournament';
+  static const timeBlocked = "Time blocked. Customers can't book it.";
+  static const blockOverlaps = 'A booking already has some of this time. Reject or cancel it first.';
+  static const blockRemoved = 'Block removed. Customers can book this time again.';
+
+  // Admin: sports venues and the people who run them
+  static const sportsVenues = 'Sports grounds';
+  static const noVenuesAdded = 'No grounds yet. Register a ground together with the person who runs it.';
+  static const manageVenue = 'Manage this ground';
+  static const groundManager = 'Ground manager';
+  static const noManagerYet = "No manager yet: customers can't book this ground until it has one.";
+  static const addManager = 'Add manager';
+  static const changeManager = 'Change manager';
+  static const removeManager = 'Remove manager';
+  static const removeManagerTitle = 'Remove this manager?';
+  static const removeManagerMessage = "Customers can't book the ground until you add another manager.";
+  static const managerRemoved = "Manager removed. Customers can't book this ground for now.";
+  static const managerAccountHint = "We make a Kuzu Help account for this email, or use the one it has already. "
+      "The first time, they open Kuzu Help, tap 'Log in', then '$forgotPassword': "
+      'a code comes by email, and they choose their password.';
+  static const managerName = "Manager's full name";
+  static const enterManagerName = "Please enter the manager's name";
+  static const managerEmail = "Manager's email";
+  static const managerPhone = "Manager's mobile number (optional)";
+  static const saveManager = 'Save manager';
+  static String managerAdded(String name, String email, {required bool created}) => created
+      ? '$name now runs this ground. Tell them to log in with $email and "$forgotPassword".'
+      : '$name now runs this ground. They are told in the app.';
+  static const managerNotAllowed =
+      "This email is an admin's, a worker's or a deactivated account. Please use another email for the ground.";
+  static const managerSetupMissing =
+      'Adding managers is not set up yet: deploy supabase/functions/create-venue-manager in Supabase.';
+
+  // Bhutan time, for bookings
+  /// '6 am', '12 pm'; 0 and 24 are '12 am' (midnight).
+  static String hourLabel(int hour) {
+    final h = hour % 24;
+    return '${h % 12 == 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}';
+  }
+
+  /// A Bhutan day: 'Sat 4 Oct'.
+  static String dayLabel(DateTime day) => '${weekdayName(BhutanTime.weekdayOf(day))} ${dayMonth(day)}';
+
+  /// '4 Oct'.
+  static String dayMonth(DateTime day) => '${day.day} ${_months[day.month - 1]}';
+
+  /// 'Sat 4 Oct, 6 pm – 8 pm' in Bhutan time; both days when it runs past midnight.
+  static String bookingTime(DateTime start, DateTime end) {
+    final from = BhutanTime.of(start);
+    final to = BhutanTime.of(end);
+    final day = BhutanTime.dayOf(start);
+    final endsSameDay = BhutanTime.dayOf(end) == day || (to.hour == 0 && end.difference(start).inHours <= 24);
+    return endsSameDay
+        ? '${dayLabel(day)}, ${hourLabel(from.hour)} – ${hourLabel(to.hour)}'
+        : '${dayLabel(day)} ${hourLabel(from.hour)} – ${dayLabel(BhutanTime.dayOf(end))} ${hourLabel(to.hour)}';
+  }
+
   // D1 Settings and edit profile
   static const settings = 'Settings';
   static const account = 'Account';
   static String roleLabel(String role) => switch (role) {
         UserRole.worker => 'Worker',
         UserRole.admin => 'Admin',
+        UserRole.groundManager => 'Ground manager',
+        UserRole.player => 'Player',
         _ => 'Customer',
       };
+
+  // One account, more than one service (UserRole.addable)
+  /// The service a role is for.
+  static String serviceLabel(String role) => role == UserRole.player ? 'Sports grounds' : 'Home services';
+  static String addingToAccount(String role) => 'This email already has a Kuzu Help account. Enter the code to '
+      'log in: ${serviceLabel(role).toLowerCase()} are added to it, and you keep everything you have.';
+  static String addService(String role) => 'Use this account for ${serviceLabel(role).toLowerCase()}';
+  static String addServiceHint(String role) => role == UserRole.player
+      ? 'Book futsal and football grounds, with the same log-in.'
+      : 'Find trusted workers for jobs at home, with the same log-in.';
+  static String serviceAdded(String role) => '${serviceLabel(role)} added to your account.';
+  static const addGroundsNote = 'Sports grounds are a separate service from home services. Add them to this '
+      'account to book: same log-in, and you keep everything you have.';
   static const myServices = 'My services';
   static const stopOfferingServices = 'Stop offering services';
   static const stopOfferingServicesHint = 'Use Kuzu Help only to find workers';
@@ -481,16 +876,42 @@ class AppStrings {
       NotificationTypes.jobCompleted => data['by'] == 'worker'
           ? '${text('worker_name', 'The worker')} marked your job as done'
           : '${text('customer_name', 'The customer')} marked the job as done',
+      NotificationTypes.venueAssigned => 'You now run ${text('venue_name', 'a ground')}',
+      NotificationTypes.bookingNew => data['status'] == BookingStatus.confirmed
+          ? '${text('customer_name', 'A customer')} booked ${text('ground_name', 'your ground')}'
+          : 'New booking request from ${text('customer_name', 'a customer')}',
+      NotificationTypes.bookingConfirmed => '${text('venue_name', 'The ground')} confirmed your booking',
+      NotificationTypes.bookingRejected => "${text('venue_name', 'The ground')} can't take your booking",
+      NotificationTypes.bookingCancelled => data['by'] == 'customer'
+          ? '${text('customer_name', 'A customer')} cancelled their booking'
+          : '${text('venue_name', 'The ground')} cancelled your booking',
+      NotificationTypes.bookingExpired => "${text('venue_name', 'The ground')} didn't answer your request",
+      NotificationTypes.bookingCompleted => 'How was ${text('venue_name', 'the ground')}?',
+      NotificationTypes.venueReviewNew => 'A customer rated your ground ${starsLabel(rating)}',
+      NotificationTypes.venueReviewUpdated =>
+        'A customer changed their rating of your ground to ${starsLabel(rating)}',
       _ => appName,
     };
+  }
+
+  /// A booking notification's court and time: 'Court A · Sat 4 Oct, 6 pm – 8 pm'.
+  static String _bookingNoticeTime(Map<String, dynamic> data) {
+    final start = DateTime.tryParse(data['starts_at'] as String? ?? '');
+    final hours = data['hours'] as int?;
+    return [
+      if ((data['ground_name'] as String?)?.trim() case final ground? when ground.isNotEmpty) ground,
+      if (start != null && hours != null) bookingTime(start, start.add(Duration(hours: hours))),
+    ].join(' · ');
   }
 
   static String notificationBody(String type, Map<String, dynamic> data) {
     final note = (data['note'] as String? ?? data['reason'] as String? ?? '').trim();
     return switch (type) {
-      NotificationTypes.welcome => data['role'] == UserRole.worker
-          ? 'Set up your worker profile. Our team checks it before customers can see you.'
-          : 'Choose a service to find trusted local workers near you.',
+      NotificationTypes.welcome => switch (data['role']) {
+          UserRole.worker => 'Set up your worker profile. Our team checks it before customers can see you.',
+          UserRole.player => 'Find a sports ground near you, choose a free time and book it.',
+          _ => 'Choose a service to find trusted local workers near you.',
+        },
       NotificationTypes.newUser => data['email'] as String? ?? '',
       NotificationTypes.workerSubmitted => 'They sent their documents. Tap to check them.',
       NotificationTypes.workerResubmitted => 'They have fixed their details. Tap to check them.',
@@ -516,6 +937,20 @@ class AppStrings {
       NotificationTypes.jobAccepted => note.isEmpty ? "They'll call you on the number you gave." : note,
       NotificationTypes.jobDeclined => note.isEmpty ? 'Try another worker for this job.' : note,
       NotificationTypes.jobCompleted => data['by'] == 'worker' ? 'How did it go? Leave a review.' : '',
+      NotificationTypes.venueAssigned => 'Answer its bookings, and keep its type, price and timings up to date here.',
+      NotificationTypes.bookingNew => [
+          _bookingNoticeTime(data),
+          if (data['status'] == BookingStatus.pending) 'Tap to confirm or reject.',
+        ].where((part) => part.isNotEmpty).join(' · '),
+      NotificationTypes.bookingConfirmed =>
+        [_bookingNoticeTime(data), note].where((part) => part.isNotEmpty).join(' · '),
+      NotificationTypes.bookingRejected => note.isEmpty ? 'Try another time or ground.' : note,
+      NotificationTypes.bookingCancelled =>
+        data['by'] == 'customer' || note.isEmpty ? _bookingNoticeTime(data) : note,
+      NotificationTypes.bookingExpired =>
+        'The request is cancelled, so the time is free again. Try another time or ground.',
+      NotificationTypes.bookingCompleted => 'Tap to leave a review.',
+      NotificationTypes.venueReviewNew || NotificationTypes.venueReviewUpdated => 'Tap to see your reviews.',
       _ => '',
     };
   }
