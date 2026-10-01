@@ -4,19 +4,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_images.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/app_bar_logo.dart';
+import '../../../shared/widgets/brand_panel.dart';
+import '../../../shared/widgets/icon_tile.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../providers/auth_providers.dart';
-import '../widgets/dzong_hero.dart';
 
 /// A2 Welcome
-/// Purpose: Logging in comes first, for everyone with an account; below it,
-/// new users choose customer or worker (that starts their sign-up). Anyone can
-/// browse sports grounds without an account.
+/// Purpose: What people come to do comes first: find a service (signs up a
+/// customer), book a ground (browsing needs no account) or, for workers,
+/// offer a service (signs up a worker). Logging in, for everyone with an
+/// account, closes the page.
+/// Layout: the logo, a brand panel that says what the app is, the three
+/// choices as one list, and Log in at the foot, as on the home screens.
 /// Backend: None; remembers the chosen role for sign-up.
-/// Done when: Either button opens login with the role remembered.
+/// Done when: Each choice opens sign-up with its role, or the grounds; Log in
+/// opens login.
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
 
@@ -28,95 +34,115 @@ class WelcomeScreen extends ConsumerWidget {
     }
 
     final text = Theme.of(context).textTheme;
-    final sectionLabel = text.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: AppColors.inkSoft);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      // White status bar icons on the roof.
-      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
+      // Dark status bar icons on the light screen.
+      value: SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
-        // Fills the screen, but scrolls on small phones or with large text.
-        body: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // The roof takes whatever room the buttons leave.
-                    Expanded(
-                      child: DzongHero(
-                        child: SafeArea(
-                          bottom: false,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const _LogoCard(),
-                                const SizedBox(height: 22),
-                                Text(
-                                  AppStrings.tagline,
-                                  textAlign: TextAlign.center,
-                                  style: text.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+        body: SafeArea(
+          // Fills the screen, with Log in at the foot, but scrolls on small
+          // phones or with large text.
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight - 28),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(
+                        height: kToolbarHeight,
+                        child: Align(alignment: Alignment.centerLeft, child: AppBarLogo()),
                       ),
-                    ),
-                    SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+                      const SizedBox(height: 12),
+                      BrandPanel(
+                        padding: const EdgeInsets.fromLTRB(22, 26, 22, 24),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Everyone with an account logs in, whatever they use the app for.
-                            Text(AppStrings.alreadyHaveAccount, style: sectionLabel),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                              style: FilledButton.styleFrom(
-                                elevation: 3,
-                                shadowColor: AppColors.primaryDeep.withValues(alpha: 0.5),
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                AppStrings.welcomeTitle,
+                                style: text.headlineSmall?.copyWith(color: Colors.white, fontSize: 26, height: 1.2),
                               ),
-                              onPressed: () => continueAs(null),
-                              child: const Text(AppStrings.logIn),
                             ),
-                            const Divider(height: 44),
-                            // New users pick how they'll use the app; that is their sign-up.
-                            Text(AppStrings.newToKuzuHelp, style: sectionLabel),
-                            const SizedBox(height: 12),
-                            _RoleButton(
-                              icon: Icons.search_rounded,
-                              title: AppStrings.needService,
-                              hint: AppStrings.needServiceHint,
-                              onPressed: () => continueAs(UserRole.customer),
+                            const SizedBox(height: 8),
+                            Text(
+                              AppStrings.tagline,
+                              style: text.bodyLarge?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            _RoleButton(
-                              icon: Icons.handyman_outlined,
-                              title: AppStrings.offerService,
-                              hint: AppStrings.offerServiceHint,
-                              onPressed: () => continueAs(UserRole.worker),
-                            ),
-                            const Divider(height: 44),
-                            // Sports grounds are open to everyone; booking asks them to log in.
-                            Text(AppStrings.lookingForGround, style: sectionLabel),
-                            const SizedBox(height: 12),
-                            _RoleButton(
-                              icon: Icons.sports_soccer_rounded,
-                              title: AppStrings.browseGrounds,
-                              hint: AppStrings.browseGroundsHint,
-                              onPressed: () => context.push(Routes.grounds),
+                            const SizedBox(height: 18),
+                            // Why it can be trusted: workers are approved by
+                            // admins, and only customers who got in touch review.
+                            const Wrap(
+                              spacing: 18,
+                              runSpacing: 8,
+                              children: [
+                                _TrustPoint(icon: Icons.verified_outlined, label: AppStrings.trustVerified),
+                                _TrustPoint(icon: Icons.star_outline_rounded, label: AppStrings.trustReviews),
+                                _TrustPoint(icon: Icons.place_outlined, label: AppStrings.trustNearby),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 28),
+                      const SectionHeader(AppStrings.whatToDo),
+                      const SizedBox(height: 12),
+                      // The three ways in, one list.
+                      Card(
+                        child: Column(
+                          children: [
+                            _ChoiceRow(
+                              icon: Icons.search_rounded,
+                              title: AppStrings.needService,
+                              hint: AppStrings.needServiceHint,
+                              onTap: () => continueAs(UserRole.customer), // signs up
+                            ),
+                            const Divider(indent: 76),
+                            _ChoiceRow(
+                              icon: Icons.sports_soccer_rounded,
+                              title: AppStrings.browseGrounds,
+                              hint: AppStrings.browseGroundsHint,
+                              // Open to everyone; booking asks them to log in.
+                              onTap: () => context.push(Routes.grounds),
+                            ),
+                            const Divider(indent: 76),
+                            _ChoiceRow(
+                              icon: Icons.handyman_outlined,
+                              title: AppStrings.offerService,
+                              hint: AppStrings.offerServiceHint,
+                              onTap: () => continueAs(UserRole.worker), // signs up
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      const SizedBox(height: 28),
+                      // Everyone with an account logs in, whatever they use the app for.
+                      Text(
+                        AppStrings.alreadyHaveAccount,
+                        textAlign: TextAlign.center,
+                        style: text.bodyMedium?.copyWith(color: AppColors.muted),
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(54),
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.primaryDeep,
+                          side: const BorderSide(color: AppColors.outline, width: 1.2),
+                        ),
+                        onPressed: () => continueAs(null),
+                        child: const Text(AppStrings.logIn),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -127,89 +153,68 @@ class WelcomeScreen extends ConsumerWidget {
   }
 }
 
-/// The logo, mark over name, on a white card floating on the roof.
-class _LogoCard extends StatelessWidget {
-  const _LogoCard();
+/// A small white icon and [label], on the brand panel.
+class _TrustPoint extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _TrustPoint({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(30, 22, 30, 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 32, offset: const Offset(0, 14)),
-        ],
-      ),
-      child: Semantics(
-        label: AppStrings.appName,
-        image: true,
-        excludeSemantics: true,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(AppImages.mark, height: 74),
-            const SizedBox(height: 12),
-            Image.asset(AppImages.wordmark, height: 28),
-          ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 17, color: Colors.white),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Colors.white,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// White card button for signing up: an icon on a tile, a title, a one-line
-/// hint and an arrow.
-class _RoleButton extends StatelessWidget {
+/// One choice in the list: its icon on a tinted tile, a title and a short
+/// hint, and a chevron.
+class _ChoiceRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String hint;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
 
-  const _RoleButton({required this.icon, required this.title, required this.hint, required this.onPressed});
+  const _ChoiceRow({required this.icon, required this.title, required this.hint, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        foregroundColor: AppColors.ink,
-        side: const BorderSide(color: AppColors.line, width: 1.2),
-      ),
+    return InkWell(
+      onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
         child: Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(color: AppColors.peach, borderRadius: BorderRadius.circular(14)),
-              child: Icon(icon, size: 24, color: AppColors.primaryDeep),
-            ),
-            const SizedBox(width: 14),
+            IconTile(icon: icon, size: 44),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                  Text(title, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
                   const SizedBox(height: 2),
                   Text(
                     hint,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      height: 1.35,
-                      color: AppColors.muted,
-                    ),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.35, color: AppColors.muted),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_rounded, color: AppColors.primaryDeep),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           ],
         ),
       ),

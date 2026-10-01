@@ -23,6 +23,8 @@
 --      Each ground's timings are time slots (several a day); customers book a whole slot,
 --      up to a week ahead. Managers add bookings taken by phone, and regular bookings
 --      (the same time every week), and keep a record of who books.
+--      Each venue can have its place on the map, for directions and how far away it is.
+--      New accounts made with 'Continue with Google' take the role picked on Welcome (13d).
 -- The last line makes the app see the changes straight away.
 -- =====================================================================
 
@@ -218,9 +220,10 @@ grant execute on function public.is_email_registered(text) to anon, authenticate
 -- ---------------------------------------------------------------------
 -- 4. What customers see: approved, active, current workers, rated by
 --    active customers. (Same columns as in schema.sql; replacing the view
---    keeps its grants.)
+--    keeps its grants.) It runs with the owner's rights, on purpose
+--    (schema.sql): never with the caller's (security_invoker).
 -- ---------------------------------------------------------------------
-create or replace view public.worker_directory as
+create or replace view public.worker_directory with (security_invoker = false) as
 select
   w.id,
   p.full_name,
@@ -1343,6 +1346,17 @@ create table if not exists public.venues (
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now()
 );
+-- Where the venue is on the map, set by its manager or an admin (from their
+-- phone's location, or a Google Maps link): the app shows customers how far
+-- away it is and opens Google Maps for directions. Null until it's set.
+-- Added after the table, so they're added here where it's older.
+alter table public.venues
+  add column if not exists latitude double precision check (latitude between -90 and 90),
+  add column if not exists longitude double precision check (longitude between -180 and 180);
+alter table public.venues drop constraint if exists venues_location_check;
+alter table public.venues add constraint venues_location_check
+  check ((latitude is null) = (longitude is null));
+
 create index if not exists venues_manager_idx on public.venues (manager_id);
 create index if not exists venues_dzongkhag_idx on public.venues (dzongkhag);
 
@@ -1634,10 +1648,15 @@ grant execute on function public.is_venue_manager(), public.can_manage_venue(uui
 grant execute on function public.is_listed_venue(uuid), public.is_active_profile(uuid) to anon;
 
 -- 13b. What customers see. Like worker_directory, these views run with the
--- owner's rights and choose their rows themselves.
+-- owner's rights and choose their rows themselves. Supabase's Security
+-- Advisor reports them as 'security definer views'; that is on purpose. Don't
+-- turn security_invoker on for them: visitors and customers would then get
+-- 'permission denied for table venues', or no venues at all. Running this
+-- file again turns it back off.
 -- venue_directory: listed venues with at least one ground taking bookings (with timings),
--- their lowest hourly price, sports and rating (from active customers).
-create or replace view public.venue_directory as
+-- their lowest hourly price, sports, rating (from active customers) and place on
+-- the map. (A replaced view can only gain columns at the end.)
+create or replace view public.venue_directory with (security_invoker = false) as
 select
   v.id,
   v.manager_id,
@@ -1658,7 +1677,9 @@ select
   g.ground_count,
   g.sports,
   coalesce(r.avg_rating, 0)::float8 as avg_rating,
-  coalesce(r.review_count, 0)::int  as review_count
+  coalesce(r.review_count, 0)::int  as review_count,
+  v.latitude,
+  v.longitude
 from public.venues v
 join public.profiles m on m.id = v.manager_id
 join lateral (
@@ -1680,7 +1701,7 @@ where v.is_active and m.is_active;
 -- ground_booking_list: 'My bookings' for customers and the bookings screen
 -- for managers, with the ground and venue. Each user gets the bookings they
 -- made and the ones at the venues they manage (admins: all).
-create or replace view public.ground_booking_list as
+create or replace view public.ground_booking_list with (security_invoker = false) as
 select
   b.id,
   b.ground_id,
@@ -1748,7 +1769,7 @@ grant select on public.venue_directory, public.grounds, public.ground_opening_ho
 -- manager, and only set_venue_manager (admins) changes the manager.
 grant select on public.venues to authenticated;
 grant update (name, description, dzongkhag, town, address, phone, whatsapp_number, cover_url,
-  auto_confirm, free_cancel_hours, cancellation_policy, payment_info, is_active)
+  auto_confirm, free_cancel_hours, cancellation_policy, payment_info, is_active, latitude, longitude)
   on public.venues to authenticated;
 
 drop policy if exists "venues: managers and admins read" on public.venues;
@@ -1909,6 +1930,42 @@ $$;
 revoke execute on function public.add_my_role(text) from public, anon;
 grant execute on function public.add_my_role(text) to authenticated;
 
+-- A3 'Continue with Google': a Google sign-in can't send the role picked on
+-- Welcome as an email sign-up's metadata does, so handle_new_user makes
+-- every new Google account a customer. Straight after, the app calls this
+-- to make it a 'worker' or 'player' instead. Only for an account made in
+-- the last 10 minutes that is still just a customer, so it can't be used
+-- to change role later (Settings has 'Become a worker' for that).
+create or replace function public.claim_signup_role(new_role text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me uuid := (select auth.uid());
+begin
+  if new_role is null or new_role not in ('worker', 'player') then
+    raise exception 'Only worker or player can be picked when signing up' using errcode = '22023';
+  end if;
+  update public.profiles p
+  set role = new_role, roles = '{}' -- keep_profile_roles puts the new role in
+  where p.id = me
+    and p.role = 'customer' and p.roles <@ array['customer'] and p.is_active
+    and exists (select 1 from auth.users u where u.id = me and u.created_at > now() - interval '10 minutes');
+  if found then
+    -- Their welcome and the admins' 'new user' notice (5a) were made with
+    -- the account, as a customer's: they now say the role picked.
+    update public.notifications n
+    set data = n.data || jsonb_build_object('role', new_role)
+    where (n.user_id = me and n.type = 'welcome') or (n.actor_id = me and n.type = 'new_user');
+  end if;
+end;
+$$;
+
+revoke execute on function public.claim_signup_role(text) from public, anon;
+grant execute on function public.claim_signup_role(text) to authenticated;
+
 -- Admins give a venue its manager: an account made by the
 -- create-venue-manager Edge Function, or one that already exists. [manager]
 -- null removes the manager, and customers can't book the venue until it
@@ -1984,11 +2041,11 @@ begin
 
   insert into public.venues (
     venue_type, name, description, dzongkhag, town, address, phone, whatsapp_number, cover_url,
-    auto_confirm, free_cancel_hours, cancellation_policy, payment_info
+    auto_confirm, free_cancel_hours, cancellation_policy, payment_info, latitude, longitude
   )
   select coalesce(d.venue_type, 'sports_ground'), d.name, d.description, d.dzongkhag, d.town, d.address,
          d.phone, d.whatsapp_number, d.cover_url, coalesce(d.auto_confirm, false),
-         coalesce(d.free_cancel_hours, 24), d.cancellation_policy, d.payment_info
+         coalesce(d.free_cancel_hours, 24), d.cancellation_policy, d.payment_info, d.latitude, d.longitude
   from jsonb_populate_record(null::public.venues, details) d
   returning id into venue;
 

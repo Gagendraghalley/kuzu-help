@@ -7,7 +7,8 @@ import '../../../shared/widgets/choice_sheet.dart';
 import '../providers/search_providers.dart';
 
 /// Button showing the chosen dzongkhag; opens 'All dzongkhags' and a list of
-/// all 20. Remembers the last choice on the phone (C1, C2).
+/// all 20, narrowed by typing (a name, another spelling or a town).
+/// Remembers the last choice on the phone (C1, C2).
 class DzongkhagSelector extends ConsumerWidget {
   const DzongkhagSelector({super.key});
 
@@ -32,6 +33,8 @@ class DzongkhagSelector extends ConsumerWidget {
                   options: const [kAllDzongkhags, ...kDzongkhags],
                   selected: selected,
                   labelOf: _label,
+                  searchHint: AppStrings.searchDzongkhags,
+                  searchTermsOf: (d) => d == kAllDzongkhags ? const [] : dzongkhagSearchTerms(d),
                 );
                 if (choice != null) ref.read(selectedDzongkhagProvider.notifier).select(choice);
               },

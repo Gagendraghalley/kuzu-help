@@ -36,6 +36,7 @@ class Routes {
   // Sports grounds: customers (Customer Home switches to them; workers open /grounds)
   static const grounds = '/grounds';
   static const myBookings = '/grounds/bookings';
+  static const searchGrounds = '/grounds/search';
   static const venueDetails = '/grounds/venue/:id';
   static const bookGround = '/grounds/venue/:id/book/:groundId';
   static const writeVenueReview = '/grounds/venue/:id/review';

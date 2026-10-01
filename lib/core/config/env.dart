@@ -15,6 +15,12 @@ class Env {
   static const _firebaseIosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
   static const _firebaseIosApiKey = String.fromEnvironment('FIREBASE_IOS_API_KEY');
 
+  // Continue with Google (optional; see the README). From Google Cloud >
+  // APIs & Services > Credentials: the Web client's ID, which Supabase checks
+  // too, and the iOS client's ID.
+  static const _googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+  static const _googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+
   static void check() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(
@@ -45,6 +51,23 @@ class Env {
       appId: appId,
       messagingSenderId: _firebaseSenderId,
       projectId: _firebaseProjectId,
+    );
+  }
+
+  /// The Google client IDs for this phone's platform, or null when
+  /// config/dev.json has none for it (or still has the example values): then
+  /// the log in screen has no 'Continue with Google' button. Android only
+  /// needs the Web client's ID; iOS needs its own client's ID as well.
+  static ({String webClientId, String? iosClientId})? get googleClientIds {
+    final needed = switch (defaultTargetPlatform) {
+      TargetPlatform.android => [_googleWebClientId],
+      TargetPlatform.iOS => [_googleWebClientId, _googleIosClientId],
+      _ => [''],
+    };
+    if (needed.any((v) => v.isEmpty || v.startsWith('YOUR-'))) return null;
+    return (
+      webClientId: _googleWebClientId,
+      iosClientId: defaultTargetPlatform == TargetPlatform.iOS ? _googleIosClientId : null,
     );
   }
 }

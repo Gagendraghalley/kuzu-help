@@ -6,10 +6,14 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException, PostgrestException;
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/location/location_service.dart';
+import '../../../core/location/my_position.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../core/utils/geo_utils.dart';
+import '../../../core/utils/launcher_utils.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/price_utils.dart';
 import '../../../core/utils/text_utils.dart';
@@ -20,9 +24,11 @@ import '../../../shared/widgets/dzongkhag_field.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/info_note.dart';
+import '../../../shared/widgets/location_problem.dart';
 import '../../../shared/widgets/photo_picker.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/text_dialog.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../data/venue_repository.dart';
 import '../providers/venue_providers.dart';
@@ -95,6 +101,7 @@ class _VenueFormState extends ConsumerState<_VenueForm> {
   late int _freeCancelHours = _venue?.freeCancelHours ?? 24;
   late final _policy = TextEditingController(text: _venue?.cancellationPolicy);
   late final _paymentInfo = TextEditingController(text: _venue?.paymentInfo);
+  late GeoPoint? _coordinates = _venue?.coordinates;
   // Type and price (the grounds row).
   late final Ground? _ground = widget.ground;
   late String _sport = _ground?.sport ?? Sport.futsal;
@@ -150,6 +157,7 @@ class _VenueFormState extends ConsumerState<_VenueForm> {
       freeCancelHours: _freeCancelHours,
       cancellationPolicy: _policy.text.orNull,
       paymentInfo: _paymentInfo.text.orNull,
+      coordinates: _coordinates,
     );
     final ground = GroundDraft(
       id: _ground?.id,
@@ -269,7 +277,9 @@ class _VenueFormState extends ConsumerState<_VenueForm> {
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(labelText: AppStrings.venueAddress, hintText: AppStrings.venueAddressHint),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
+            _MapLocation(value: _coordinates, onChanged: (place) => setState(() => _coordinates = place)),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
@@ -482,6 +492,130 @@ class _Timings extends StatelessWidget {
           icon: const Icon(Icons.schedule_rounded),
           label: const Text(AppStrings.setTimings),
           onPressed: () => context.push(Routes.venueTimingsFor(venueId)),
+        ),
+      ],
+    );
+  }
+}
+
+/// Where the ground is on the map, for customers' distances and directions:
+/// from the phone's location while standing at the ground, or a pasted
+/// Google Maps link. Saved with the form.
+class _MapLocation extends ConsumerStatefulWidget {
+  final GeoPoint? value;
+  final ValueChanged<GeoPoint?> onChanged;
+
+  const _MapLocation({required this.value, required this.onChanged});
+
+  @override
+  ConsumerState<_MapLocation> createState() => _MapLocationState();
+}
+
+class _MapLocationState extends ConsumerState<_MapLocation> {
+  bool _locating = false;
+  bool _readingLink = false;
+
+  void _say(String message) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+
+  void _use(GeoPoint place) {
+    if (place.isInBhutan) {
+      widget.onChanged(place);
+    } else {
+      _say(AppStrings.notInBhutan);
+    }
+  }
+
+  Future<void> _useMyLocation() async {
+    final service = ref.read(locationServiceProvider);
+    setState(() => _locating = true);
+    try {
+      final here = await service.current(precise: true);
+      // The app may use the location now: distances to grounds can show too.
+      ref.invalidate(myPositionProvider);
+      if (mounted) _use(here);
+    } on LocationUnavailable catch (e) {
+      if (mounted) showLocationProblem(context, service, e.problem);
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _pasteLink() async {
+    final text = await showTextDialog(
+      context,
+      title: AppStrings.mapsLinkTitle,
+      hint: AppStrings.mapsLinkHint,
+      confirmLabel: AppStrings.useLink,
+      requiredMessage: AppStrings.pasteLinkFirst,
+      maxLength: 2000,
+    );
+    if (text == null || text.isEmpty || !mounted) return;
+    setState(() => _readingLink = true);
+    try {
+      final place = await ref.read(locationServiceProvider).resolveMapsLink(text);
+      if (!mounted) return;
+      if (place == null) {
+        _say(AppStrings.mapsLinkNoPlace);
+      } else {
+        _use(place);
+      }
+    } catch (e) {
+      if (mounted) _say(ErrorMessages.from(e));
+    } finally {
+      if (mounted) setState(() => _readingLink = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final place = widget.value;
+    final busy = _locating || _readingLink;
+    const spinner = SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionHeader(AppStrings.mapLocation),
+        const SizedBox(height: 8),
+        const InfoNote(icon: Icons.near_me_outlined, text: AppStrings.mapLocationHint),
+        const SizedBox(height: 10),
+        Card(
+          child: ListTile(
+            leading: Icon(
+              place == null ? Icons.location_off_outlined : Icons.location_on_rounded,
+              color: place == null ? AppColors.muted : AppColors.verified,
+            ),
+            title: Text(place == null ? AppStrings.notOnMapYet : AppStrings.onTheMap),
+            subtitle: place == null ? null : Text(place.label),
+            trailing: place == null
+                ? null
+                : IconButton(
+                    tooltip: AppStrings.removeFromMap,
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => widget.onChanged(null),
+                  ),
+          ),
+        ),
+        if (place != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.map_outlined),
+              label: const Text(AppStrings.checkOnMap),
+              onPressed: () => LauncherUtils.showOnMap(place),
+            ),
+          ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          icon: _locating ? spinner : const Icon(Icons.my_location_rounded),
+          label: const Text(AppStrings.useMyLocation),
+          onPressed: busy ? null : _useMyLocation,
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          icon: _readingLink ? spinner : const Icon(Icons.link_rounded),
+          label: const Text(AppStrings.pasteMapsLink),
+          onPressed: busy ? null : _pasteLink,
         ),
       ],
     );

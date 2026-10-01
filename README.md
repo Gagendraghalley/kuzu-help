@@ -100,8 +100,9 @@ changed.
    - **Dzongkha category names**: fill in `service_categories.name_dz` in the Table Editor
      and Customer Home shows it under the English name. The rest of the app is English
      until its text (all in `app_strings.dart`) is translated.
-   - **Sports grounds** (section 13): Customer Home offers three services: Home services
-     (the workers above), Sports grounds, and Party & dining (coming soon). An admin
+   - **Sports grounds** (section 13): Customer Home offers Home services (the workers
+     above) and Sports grounds. A third, Party & dining, is hidden until it's ready
+     (`showPartyDining` in `customer_home_screen.dart`). An admin
      registers each futsal or football ground together with its **ground manager**, the one
      person who runs it (Settings → Sports grounds → Register a ground: the ground's details,
      its type and price per hour, and the manager's name, email and phone, saved together;
@@ -137,7 +138,20 @@ changed.
      Settings, or on a ground's booking screen) adds that role to the account
      (`profiles.roles`, `add_my_role`), and a customer who plays too keeps Customer Home,
      which has sports grounds as well. Only accounts with the player role can book a
-     ground. Cover photos go in the public `venue-photos` bucket. Optional: to tell
+     ground. Cover photos go in the public `venue-photos` bucket.
+     **Finding grounds**: 'Search grounds by name or place' finds them anywhere in Bhutan by
+     name, town or dzongkhag. Under 'Location on the map' (Edit ground, or when registering
+     one) the manager or an admin sets where the ground is: 'Use my current location' while
+     standing there, or a pasted Google Maps link (Share, then Copy link; short
+     `maps.app.goo.gl` links are followed). Customers then see how far away each ground is in
+     a straight line, and 'Directions' (on its card and its page) opens Google Maps, which
+     shows the road and the drive time. No Google API key or billing is needed.
+     **Location**: the first time the app needs it, it asks once to use the phone's location;
+     after that only when someone taps 'Nearest first' or 'How far is it from me?'. 'Your
+     area' then starts as the dzongkhag the phone is in (the nearest main town in
+     `dzongkhags.dart`), for workers and grounds alike; one picked by hand stays until the app
+     is closed. Outside Bhutan no distances are shown. Every dzongkhag picker narrows as you
+     type: a name, another spelling (Wangdi, Chukha) or a town (Phuentsholing, Gelephu). Optional: to tell
      customers about expired requests straight away, turn on pg_cron (Database → Extensions)
      and run the `cron.schedule` line at the end of section 13 once.
      Words: in the app, a venue (the place, e.g. Babesa Futsal Ground) is called a
@@ -242,6 +256,50 @@ It needs a paid Apple Developer team (this project uses team `6E2JNTTC36`), and:
 4. Test on a real iPhone, run from Xcode or `flutter run` with the team selected under
    Runner → Signing & Capabilities. (Recent simulators on Apple silicon Macs can receive
    pushes too, but a real phone is the dependable test.)
+
+## Sign in with Google (optional; Android and iPhone)
+
+Adds **Continue with Google** to the log in and sign-up screen: no code to type and no
+password to choose. Until it is set up the button is hidden and email sign-in works as
+before. The app uses Google's own account picker and hands Supabase the ID token
+(`AuthRepository.signInWithGoogle`); no web page or redirect is involved.
+
+1. **Google Cloud** (console.cloud.google.com; the Firebase project is fine): *Google Auth
+   Platform → Branding*: app name *Kuzu Help* and a support email (a logo is optional,
+   and waits for Google's review). Under *Audience*, **Publish** the app, or only the test
+   users listed there can sign in.
+2. *Clients → Create client*, three times:
+   - **Web application** (name it e.g. *Supabase*). Its Client ID goes into
+     `GOOGLE_WEB_CLIENT_ID` in `config/dev.json`; it and its Client secret go into Supabase
+     (step 3). Both phones ask Google for tokens meant for this client.
+   - **Android**: package name `bt.kuzuhelp.app` and a SHA-1 fingerprint. Make one per key
+     the app is signed with: the debug key (`keytool -list -v -keystore
+     ~/.android/debug.keystore -alias androiddebugkey -storepass android`), the upload key in
+     `android/key.properties`, and Play Console → *Test and release → App integrity → App
+     signing key*. Nothing from these goes into the app.
+   - **iOS**: bundle ID `bt.kuzuhelp.bhutanServices`. Its Client ID goes into
+     `GOOGLE_IOS_CLIENT_ID`, and its *iOS URL scheme* (`com.googleusercontent.apps.…`)
+     replaces `com.googleusercontent.apps.YOUR-IOS-CLIENT-ID` in `ios/Runner/Info.plist`.
+3. **Supabase** → Authentication → Sign In / Providers → **Google**: turn it on. *Client
+   IDs*: the Web client ID, a comma, then the iOS client ID. *Client Secret*: the Web
+   client's secret. Leave *Skip nonce checks* off (the app sends a nonce). Save.
+4. Run the latest `supabase/updates.sql` (13d adds `claim_signup_role`).
+5. Run with the new `config/dev.json`, tap *Find a service → Continue with Google*, pick an
+   account: you land on Customer Home with your Google name.
+
+How it fits the rest of sign-up:
+- The database makes every new Google account a customer (Google can't carry the role the
+  way the email code's metadata does). Right after, the splash calls `claim_signup_role`,
+  which makes it a worker or player when that's what they picked on Welcome. It only works
+  on an account made in the last 10 minutes, so it can't be used to change role later.
+- Signing in with Google with an email that already has an account logs into that account
+  (Supabase links the two); picking home services or sports grounds adds that service, as
+  the email code does. Picking *Offer your services* doesn't turn an existing account into
+  a worker: Settings → *Become a worker* does that.
+- Google accounts skip *Create a password*. They can add one in Settings → *Change
+  password* (or with *Forgot password?*) to log in with email too.
+- If the button shows an error, check the Web client ID in both `config/dev.json` and
+  Supabase, and on Android the SHA-1 of the key the app was signed with.
 
 ## Android release build (Google Play)
 

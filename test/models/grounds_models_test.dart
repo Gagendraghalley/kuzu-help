@@ -49,8 +49,17 @@ void main() {
     });
   });
 
+  test('timetable times are as short as reads clearly', () {
+    expect(AppStrings.hoursShort(18, 20), '6 – 8 pm');
+    expect(AppStrings.hoursShort(8, 10), '8 – 10 am');
+    expect(AppStrings.hoursShort(12, 14), '12 – 2 pm');
+    expect(AppStrings.hoursShort(0, 2), '12 – 2 am');
+    expect(AppStrings.hoursShort(22, 24), '10 pm – 12 am'); // into the next day
+    expect(AppStrings.hoursShort(11, 13), '11 am – 1 pm');
+  });
+
   test('PriceUtils.nu groups thousands', () {
-    expect([0, 950, 1500, 100000].map(PriceUtils.nu), ['Nu 0', 'Nu 950', 'Nu 1,500', 'Nu 100,000']);
+    expect([0, 950, 1500, 100000].map(PriceUtils.nu), ['Nu. 0', 'Nu. 950', 'Nu. 1,500', 'Nu. 100,000']);
   });
 
   group('Ground', () {
@@ -77,8 +86,8 @@ void main() {
       // A time that runs into the night: one hour at each price.
       expect(ground.priceOf(const TimeSlot(weekday: 0, startHour: 16, endHour: 18)), 2500);
       expect(AppStrings.groundPrice(1000, eveningPrice: 1500, eveningFrom: 18),
-          'Nu 1,000 an hour · Nu 1,500 an hour at night, from 6 pm');
-      expect(AppStrings.groundPrice(1000, eveningFrom: 18), 'Nu 1,000 an hour');
+          'Nu. 1,000/hour · Nu. 1,500/hour at night, from 6 pm');
+      expect(AppStrings.groundPrice(1000, eveningFrom: 18), 'Nu. 1,000/hour');
       expect(const Ground(id: 'g', venueId: 'v', name: 'B', pricePerHourNu: 800).priceFor(18, 2), 1600);
     });
 

@@ -3,6 +3,7 @@ import 'package:bhutan_services/core/strings/app_strings.dart';
 import 'package:bhutan_services/shared/models/review.dart';
 import 'package:bhutan_services/shared/models/verification.dart';
 import 'package:bhutan_services/shared/models/worker_profile.dart';
+import 'package:bhutan_services/shared/widgets/dzongkhag_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,7 +40,7 @@ void main() {
 
     await enterField(tester, AppStrings.mobileNumber, '17123456');
     await enterField(tester, AppStrings.yearsExperience, '8');
-    await scrollAndTap(tester, find.byType(DropdownButtonFormField<String>));
+    await scrollAndTap(tester, find.byType(DzongkhagField));
     await tester.tap(find.text('Chhukha').last);
     await tester.pumpAndSettle();
     await scrollAndTap(tester, find.text(AppStrings.saveAndContinue));

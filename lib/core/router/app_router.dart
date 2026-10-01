@@ -28,6 +28,7 @@ import '../../features/grounds/screens/ground_timings_screen.dart';
 import '../../features/grounds/screens/my_bookings_screen.dart';
 import '../../features/grounds/screens/player_home_screen.dart';
 import '../../features/grounds/screens/manager_home_screen.dart';
+import '../../features/grounds/screens/search_venues_screen.dart';
 import '../../features/grounds/screens/venue_bookings_screen.dart';
 import '../../features/grounds/screens/venue_details_screen.dart';
 import '../../features/grounds/screens/venue_form_screen.dart';
@@ -96,6 +97,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       GoRoute(path: Routes.grounds, builder: (_, __) => const VenueListScreen()),
       GoRoute(path: Routes.myBookings, builder: (_, __) => const MyBookingsScreen()),
+      GoRoute(path: Routes.searchGrounds, builder: (_, __) => const SearchVenuesScreen()),
       GoRoute(
         path: Routes.venueDetails,
         builder: (_, s) => VenueDetailsScreen(venueId: s.pathParameters['id']!),
@@ -147,9 +149,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
 const _loggedOutRoutes = {Routes.welcome, Routes.login, Routes.verifyOtp};
 
-/// Sports grounds, for everyone: logged-out visitors look at venues and
-/// their free times, then log in to book.
-const _publicRoutes = {Routes.grounds, Routes.venueDetails, Routes.bookGround};
+/// Sports grounds, for everyone: logged-out visitors look at and search
+/// venues and their free times, then log in to book.
+const _publicRoutes = {Routes.grounds, Routes.searchGrounds, Routes.venueDetails, Routes.bookGround};
 
 /// The splash screen (A1) picks each user's first screen itself (A5 set
 /// password comes first when needed). Logged-out users see Welcome, login and

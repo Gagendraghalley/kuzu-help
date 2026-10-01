@@ -22,6 +22,21 @@ final venuesProvider = FutureProvider.autoDispose<List<Venue>>((ref) async {
 /// Only venues with this Sport value; null: every sport.
 final sportFilterProvider = StateProvider<String?>((ref) => null);
 
+/// Venues nearest first, once the phone's place is known (else best rated first).
+final nearestFirstProvider = StateProvider<bool>((ref) => false);
+
+/// 'See how far each ground is' closed with its ✕: hidden until the app is closed.
+final distancePromptClosedProvider = StateProvider<bool>((ref) => false);
+
+/// Search grounds (from Customer Home): what's typed, and the venues found.
+final venueSearchProvider = StateProvider.autoDispose<String>((ref) => '');
+
+final venueSearchResultsProvider = FutureProvider.autoDispose<List<Venue>>((ref) {
+  final query = ref.watch(venueSearchProvider).trim();
+  if (query.length < 2) return const [];
+  return ref.watch(venueRepositoryProvider).searchVenues(query);
+});
+
 /// A venue's page, and the screens that run it. Invalidate
 /// after changing the venue or its grounds.
 final venueDetailsProvider = FutureProvider.autoDispose.family<VenueDetails?, String>(

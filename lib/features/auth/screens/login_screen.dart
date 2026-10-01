@@ -11,15 +11,19 @@ import '../../../core/utils/error_messages.dart';
 import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../data/auth_repository.dart';
 import '../providers/auth_providers.dart';
 import '../widgets/auth_scaffold.dart';
+import '../widgets/google_button.dart';
 import '../widgets/password_field.dart';
 
 /// A3 Login
 /// Purpose: Sign up with an email code, or log in with email and password.
+/// Either way, 'Continue with Google' (when set up) does it in one tap.
 /// Backend: Sign-ups check the email isn't registered, then send an OTP with
 /// name + role as metadata (A4, then A5 sets the password). Log-ins check the
 /// password. 'Forgot password?' sends an OTP and ends on A5 with a new password.
+/// Google sign-ins make the account the first time; the splash gives it the role.
 /// Done when: A code arrives within a minute; the right password logs in.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -36,6 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   bool _busy = false;
   bool _sendingReset = false;
+  bool _usingGoogle = false;
   bool _alreadyRegistered = false;
   String? _error;
 
@@ -48,11 +53,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   /// Runs [action] with the loading state, showing any error.
-  Future<void> _run(Future<void> Function() action, {bool reset = false}) async {
+  Future<void> _run(Future<void> Function() action, {bool reset = false, bool google = false}) async {
     if (_busy) return;
     setState(() {
       _busy = true;
       _sendingReset = reset;
+      _usingGoogle = google;
       _alreadyRegistered = false;
       _error = null;
     });
@@ -71,6 +77,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         setState(() {
           _busy = false;
           _sendingReset = false;
+          _usingGoogle = false;
         });
       }
     }
@@ -100,6 +107,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
+  /// Sign up or log in with Google: nothing to type. On success the router
+  /// moves on by itself; closing Google's account picker leaves them here.
+  void _continueWithGoogle() => _run(google: true, () => ref.read(authActionsProvider).continueWithGoogle());
+
   /// Between sign-up and log-in on this screen, keeping the email typed.
   void _switchTo({required String? role}) {
     ref.read(chosenRoleProvider.notifier).state = role;
@@ -120,6 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final role = ref.watch(chosenRoleProvider);
     final isSignUp = role != null;
+    final canUseGoogle = ref.watch(authRepositoryProvider).canUseGoogle;
 
     return AuthScaffold(
       // Signing up, the badge shows how they'll use the app; logging in, the logo.
@@ -138,6 +150,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // The quickest way in comes first; the email form is the other.
+              if (canUseGoogle) ...[
+                GoogleButton(onPressed: _busy ? null : _continueWithGoogle, isLoading: _usingGoogle),
+                const SizedBox(height: 18),
+                const _OrDivider(AppStrings.orUseEmail),
+                const SizedBox(height: 18),
+              ],
               if (isSignUp) ...[
                 TextFormField(
                   controller: _name,
@@ -198,7 +217,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               SizedBox(height: isSignUp ? 28 : 16),
               PrimaryButton(
                 label: isSignUp ? AppStrings.sendCode : AppStrings.logIn,
-                isLoading: _busy && !_sendingReset,
+                isLoading: _busy && !_sendingReset && !_usingGoogle,
                 onPressed: isSignUp ? _sendCode : _logIn,
               ),
               const SizedBox(height: 16),
@@ -223,6 +242,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A hairline either side of a short [label], between two ways in.
+class _OrDivider extends StatelessWidget {
+  final String label;
+
+  const _OrDivider(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+          ),
+        ),
+        const Expanded(child: Divider()),
+      ],
     );
   }
 }

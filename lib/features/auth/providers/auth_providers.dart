@@ -22,6 +22,11 @@ final chosenRoleProvider = StateProvider<String?>((ref) => null);
 /// What was sent from the login screen (A3), needed again to verify or resend (A4).
 final otpRequestProvider = StateProvider<OtpRequest?>((ref) => null);
 
+/// The role picked on Welcome by someone who signed up with 'Continue with
+/// Google' (A3), until the splash (A1) has given it to their account. Null
+/// when they logged in with Google.
+final googleSignUpRoleProvider = StateProvider<String?>((ref) => null);
+
 /// Where a visitor tapped 'Log in to book' (a ground's booking screen). Once
 /// they have logged in (and set a password, if new), the splash (A1) opens
 /// it over their home screen.
@@ -53,11 +58,28 @@ final startRouteProvider = FutureProvider.autoDispose<String>((ref) async {
     ref.invalidate(myProfileProvider); // screens read the new roles
     profile = (await profiles.getMyProfile())!;
   }
+  // Signed up with Google: the database made a new account a customer, so it
+  // now takes the role they picked (claim_signup_role). An account that was
+  // there already gets home services or sports grounds added, as above.
+  final googleRole = ref.read(googleSignUpRoleProvider);
+  if (googleRole != null) {
+    if (googleRole == UserRole.worker || googleRole == UserRole.player) {
+      await profiles.claimSignUpRole(googleRole);
+    }
+    if (UserRole.addable.contains(googleRole) && !(await profiles.getMyProfile())!.hasRole(googleRole)) {
+      await profiles.addRole(googleRole);
+    }
+    ref.read(googleSignUpRoleProvider.notifier).state = null;
+    ref.invalidate(myProfileProvider);
+    profile = (await profiles.getMyProfile())!;
+  }
   // A5 next: every new user, and anyone who has just used 'Forgot password?'.
   // Except admins (made in the SQL editor): they may log in with an email code
-  // alone, and can set a password in Settings.
+  // alone, and can set a password in Settings. And except Google accounts,
+  // which log in with Google; they too can set a password in Settings.
   final resettingPassword = ref.read(otpRequestProvider)?.isPasswordReset ?? false;
-  if ((!auth.hasPassword || resettingPassword) && profile.role != UserRole.admin) {
+  final needsPassword = !auth.hasPassword && !auth.usesGoogle;
+  if ((needsPassword || resettingPassword) && profile.role != UserRole.admin) {
     return Routes.setPassword;
   }
   if (profile.role != UserRole.worker) return startRouteFor(profile);
@@ -120,6 +142,23 @@ class AuthActions {
     }
   }
 
+  /// A3 'Continue with Google', to sign up (a role was picked on Welcome) or
+  /// log in. Google's account picker opens; the first time, the account is
+  /// made then and the splash (A1) gives it the role. Returns false when the
+  /// picker is closed. On success the router takes the user on.
+  Future<bool> continueWithGoogle() async {
+    _forgetCodeRequest();
+    final role = _ref.read(chosenRoleProvider);
+    // Set before signing in: the splash starts as soon as they're logged in.
+    _ref.read(googleSignUpRoleProvider.notifier).state = role;
+    var signedIn = false;
+    try {
+      return signedIn = await _repo.signInWithGoogle();
+    } finally {
+      if (!signedIn) _ref.read(googleSignUpRoleProvider.notifier).state = null;
+    }
+  }
+
   /// A5. The screen then sends the user on through the splash (A1).
   Future<void> setPassword(String password) async {
     await _repo.setPassword(password);
@@ -135,7 +174,11 @@ class AuthActions {
     return _repo.signOut();
   }
 
-  void _forgetCodeRequest() => _ref.read(otpRequestProvider.notifier).state = null;
+  /// Also forgets a Google sign-up's role, so it can't go to another account.
+  void _forgetCodeRequest() {
+    _ref.read(otpRequestProvider.notifier).state = null;
+    _ref.read(googleSignUpRoleProvider.notifier).state = null;
+  }
 
   /// For an account that exists, a plain log-in code: no new user.
   Future<void> _send(OtpRequest request) => _repo.sendOtp(

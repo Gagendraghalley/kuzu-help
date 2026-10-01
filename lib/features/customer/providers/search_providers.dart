@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/dzongkhags.dart';
+import '../../../core/location/my_position.dart';
+import '../../../core/utils/geo_utils.dart';
 import '../../../shared/models/service_category.dart';
 import '../../../shared/models/worker_listing.dart';
 import '../../profile/data/profile_repository.dart';
@@ -16,16 +18,32 @@ import '../data/directory_repository.dart';
 final categoriesProvider = FutureProvider.autoDispose<List<ServiceCategory>>(
     (ref) => ref.watch(directoryRepositoryProvider).getCategories());
 
-/// C1/C2: the dzongkhag customers search in, or [kAllDzongkhags]; remembered on
-/// the phone. Until they pick one it is their own dzongkhag, or Thimphu.
+/// C1/C2: the dzongkhag customers search in, or [kAllDzongkhags]. Each time
+/// the app opens it is the one the phone is in, once that's known (myPosition);
+/// until then the last one picked (remembered on the phone), their own, or
+/// Thimphu. One picked by hand stays until the app is closed, wherever the
+/// phone goes.
 final selectedDzongkhagProvider =
     AsyncNotifierProvider<SelectedDzongkhag, String>(SelectedDzongkhag.new);
 
 class SelectedDzongkhag extends AsyncNotifier<String> {
   static const _key = 'selected_dzongkhag';
+  bool _picked = false; // by hand, since the app opened
 
   @override
   Future<String> build() async {
+    // The phone's place may come after the list has loaded: then move there.
+    ref.listen(myPositionProvider, (_, next) {
+      final here = _dzongkhagHere(next.valueOrNull);
+      if (here != null && !_picked && state.valueOrNull != here) state = AsyncData(here);
+    });
+    final fallback = await _savedOrOwn();
+    return _dzongkhagHere(ref.read(myPositionProvider).valueOrNull) ?? fallback;
+  }
+
+  static String? _dzongkhagHere(GeoPoint? place) => place == null ? null : dzongkhagAt(place);
+
+  Future<String> _savedOrOwn() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_key);
     if (saved == kAllDzongkhags || kDzongkhags.contains(saved)) return saved!;
@@ -39,6 +57,7 @@ class SelectedDzongkhag extends AsyncNotifier<String> {
   }
 
   Future<void> select(String dzongkhag) async {
+    _picked = true;
     state = AsyncData(dzongkhag);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, dzongkhag);

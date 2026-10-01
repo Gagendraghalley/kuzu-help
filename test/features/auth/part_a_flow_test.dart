@@ -20,12 +20,11 @@ Future<void> setPassword(WidgetTester tester, String password) async {
   await tapAndSettle(tester, AppStrings.savePassword);
 }
 
-/// The Log in button, on Welcome or on the log in screen (whose title says
-/// 'Log in' too).
-Future<void> tapLogIn(WidgetTester tester) async {
-  await tester.tap(find.widgetWithText(FilledButton, AppStrings.logIn));
-  await tester.pumpAndSettle();
-}
+/// The Log in button, at the foot of Welcome or on the log in screen (whose
+/// title says 'Log in' too).
+Future<void> tapLogIn(WidgetTester tester) => scrollAndTap(
+    tester,
+    find.ancestor(of: find.text(AppStrings.logIn), matching: find.byWidgetPredicate((w) => w is ButtonStyleButton)));
 
 /// A2 -> A3 -> A4 as a new customer.
 Future<void> signUpUntilCode(WidgetTester tester) async {
@@ -43,11 +42,71 @@ void main() {
   testWidgets('A1 -> A2: logged-out users see Welcome: create an account, or log in',
       (tester) async {
     await pumpApp(tester);
-    expect(find.text(AppStrings.newToKuzuHelp), findsOneWidget);
+    expect(find.text(AppStrings.whatToDo), findsOneWidget);
     expect(find.text(AppStrings.needService), findsOneWidget);
     expect(find.text(AppStrings.offerService), findsOneWidget);
     expect(find.text(AppStrings.alreadyHaveAccount), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, AppStrings.logIn), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, AppStrings.logIn), findsOneWidget);
+  });
+
+  group('Continue with Google', () {
+    testWidgets('a new customer signs up in one tap: no code, no password', (tester) async {
+      final auth = (await pumpApp(tester)).auth; // the database makes Google accounts customers
+
+      await tapAndSettle(tester, AppStrings.needService);
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+
+      expect(auth.googleSignIns, 1);
+      expect(auth.sentCodes, isEmpty);
+      expect(find.text(AppStrings.createPasswordTitle), findsNothing);
+      expect(customerHome, findsOneWidget);
+    });
+
+    testWidgets('a new worker gets the worker role and lands on profile setup', (tester) async {
+      final fakes = await pumpApp(tester);
+      fakes.profile.isNewAccount = true;
+
+      await tapAndSettle(tester, AppStrings.offerService);
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+
+      expect(fakes.profile.claimedRoles, [UserRole.worker]);
+      expect(fakes.profile.profile.roles, [UserRole.worker]);
+      expect(workerSetup, findsOneWidget);
+    });
+
+    testWidgets('an account that was there already keeps its role when signing up as a worker',
+        (tester) async {
+      final fakes = await pumpApp(tester, hasPassword: true); // isNewAccount is false
+
+      await tapAndSettle(tester, AppStrings.offerService);
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+
+      expect(fakes.profile.profile.role, UserRole.customer);
+      expect(customerHome, findsOneWidget);
+    });
+
+    testWidgets('logging in: closing the picker stays put, picking an account goes home', (tester) async {
+      final auth = (await pumpApp(tester)).auth;
+      await tapLogIn(tester); // on Welcome
+
+      auth.googlePicksAccount = false;
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+      expect(find.text(AppStrings.logInHint), findsOneWidget);
+      expect(find.text(AppStrings.googleSignInFailed), findsNothing); // closing it is no error
+
+      auth.googlePicksAccount = true;
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+      expect(auth.googleSignIns, 2);
+      expect(customerHome, findsOneWidget);
+    });
+
+    testWidgets('without Google client IDs in config/dev.json there is no button', (tester) async {
+      final auth = (await pumpApp(tester)).auth..canUseGoogle = false;
+      await tapLogIn(tester); // on Welcome
+      expect(find.text(AppStrings.continueWithGoogle), findsNothing);
+      expect(find.text(AppStrings.orUseEmail), findsNothing);
+      expect(auth.googleSignIns, 0);
+    });
   });
 
   testWidgets('signing up with a registered email says so, and offers to log in instead',
@@ -83,8 +142,8 @@ void main() {
     await tapLogIn(tester);
     expect(find.text(AppStrings.noAccountFound), findsOneWidget);
 
-    await tapAndSettle(tester, AppStrings.newHereCreateAccount);
-    expect(find.text(AppStrings.newToKuzuHelp), findsOneWidget); // back on Welcome
+    await scrollAndTap(tester, find.text(AppStrings.newHereCreateAccount));
+    expect(find.text(AppStrings.whatToDo), findsOneWidget); // back on Welcome
   });
 
   testWidgets('a new customer signs up with a code, sets a password and lands on Customer Home',

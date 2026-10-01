@@ -3,6 +3,9 @@ import 'dart:typed_data';
 
 import 'package:bhutan_services/app.dart';
 import 'package:bhutan_services/core/constants/app_constants.dart';
+import 'package:bhutan_services/core/location/location_service.dart';
+import 'package:bhutan_services/core/location/my_position.dart';
+import 'package:bhutan_services/core/utils/geo_utils.dart';
 import 'package:bhutan_services/features/admin/data/admin_repository.dart';
 import 'package:bhutan_services/features/auth/data/auth_repository.dart';
 import 'package:bhutan_services/features/customer/data/contact_repository.dart';
@@ -92,6 +95,27 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<bool> isEmailRegistered(String email) async => email == registeredEmail;
 
+  /// config/dev.json has the Google client IDs, so the button shows.
+  @override
+  bool canUseGoogle = true;
+
+  @override
+  bool usesGoogle = false;
+
+  /// False: the user closes Google's account picker instead of picking one.
+  bool googlePicksAccount = true;
+  int googleSignIns = 0;
+
+  @override
+  Future<bool> signInWithGoogle() async {
+    googleSignIns++;
+    if (!googlePicksAccount) return false;
+    _loggedIn = true;
+    usesGoogle = true;
+    _changes.add(null);
+    return true;
+  }
+
   @override
   Future<void> signInWithPassword({required String email, required String password}) async {
     passwordLogIns.add(email);
@@ -163,6 +187,28 @@ class FakeProfileRepository implements ProfileRepository {
   void _switch({required String from, required String to}) {
     if (profile.role != from) return;
     profile = _with(role: to);
+  }
+
+  /// The account was made just now (by a Google sign-in), for claimSignUpRole.
+  bool isNewAccount = false;
+  final claimedRoles = <String>[];
+
+  /// Like claim_signup_role: only a new account that is just a customer
+  /// takes the role, and then has only that one.
+  @override
+  Future<void> claimSignUpRole(String role) async {
+    claimedRoles.add(role);
+    if (!isNewAccount || profile.role != UserRole.customer || profile.roles.any((r) => r != UserRole.customer)) {
+      return;
+    }
+    profile = Profile(
+      id: profile.id,
+      fullName: profile.fullName,
+      role: role,
+      roles: [role],
+      email: profile.email,
+      isActive: profile.isActive,
+    );
   }
 
   final addedRoles = <String>[];
@@ -669,6 +715,16 @@ class FakeVenueRepository implements VenueRepository {
       venues.where((v) => _listed(v) && (dzongkhag == null || v.dzongkhag == dzongkhag)).toList();
 
   @override
+  Future<List<Venue>> searchVenues(String query) async {
+    final term = query.trim().toLowerCase();
+    return venues
+        .where((v) =>
+            _listed(v) &&
+            [v.name, v.town ?? '', v.dzongkhag].any((field) => field.toLowerCase().contains(term)))
+        .toList();
+  }
+
+  @override
   Future<VenueDetails?> getVenue(String id) async {
     final venue = venues.where((v) => v.id == id).firstOrNull;
     if (venue == null || !(_listed(venue) || venue.managerId == me || viewerIsAdmin)) return null;
@@ -792,8 +848,41 @@ class FakeVenueRepository implements VenueRepository {
     );
   }
 
-  static VenueDraft _draftOf(Venue v) =>
-      VenueDraft(name: v.name, dzongkhag: v.dzongkhag, phone: v.phone, autoConfirm: v.autoConfirm);
+  static VenueDraft _draftOf(Venue v) => VenueDraft(
+      name: v.name, dzongkhag: v.dzongkhag, phone: v.phone, autoConfirm: v.autoConfirm, coordinates: v.coordinates);
+}
+
+/// The phone's location: [position], once the app may use it ([allowed]).
+/// Asking ([current]) allows it, unless [problem] says what goes wrong.
+/// [links]: short Google Maps links and where they lead; other text is read
+/// as the app reads it.
+class FakeLocationService implements LocationService {
+  FakeLocationService({this.position, this.allowed = false});
+
+  GeoPoint? position;
+  bool allowed;
+  LocationProblem? problem;
+  int asked = 0;
+  final links = <String, GeoPoint>{};
+  final settingsOpened = <LocationProblem>[];
+
+  @override
+  Future<GeoPoint?> currentIfAllowed() async => allowed ? position : null;
+
+  @override
+  Future<GeoPoint> current({bool precise = false}) async {
+    asked++;
+    final problem = this.problem;
+    if (problem != null) throw LocationUnavailable(problem);
+    allowed = true;
+    return position ?? (throw const LocationUnavailable(LocationProblem.unavailable));
+  }
+
+  @override
+  Future<void> openSettings(LocationProblem problem) async => settingsOpened.add(problem);
+
+  @override
+  Future<GeoPoint?> resolveMapsLink(String text) async => links[text.trim()] ?? MapsLink.parse(text);
 }
 
 /// Like the database: bookings of one ground can't overlap (23P01), and
@@ -1064,6 +1153,7 @@ Venue venueFrom(
       dzongkhag: draft.dzongkhag,
       phone: draft.phone,
       autoConfirm: draft.autoConfirm,
+      coordinates: draft.coordinates,
       isActive: active,
       sports: const [Sport.futsal],
       groundCount: 1,
@@ -1078,9 +1168,11 @@ Venue venue({
   String name = 'Changli Futsal',
   String dzongkhag = 'Thimphu',
   bool autoConfirm = false,
+  GeoPoint? coordinates,
 }) =>
     venueFrom(
-      VenueDraft(name: name, dzongkhag: dzongkhag, phone: '+97517111111', autoConfirm: autoConfirm),
+      VenueDraft(
+          name: name, dzongkhag: dzongkhag, phone: '+97517111111', autoConfirm: autoConfirm, coordinates: coordinates),
       id: id,
       manager: manager,
     );
@@ -1181,6 +1273,7 @@ class Fakes {
     required this.push,
     required this.venues,
     required this.bookings,
+    required this.location,
   });
 
   final FakeAuthRepository auth;
@@ -1198,6 +1291,7 @@ class Fakes {
   final FakePushRepository push;
   final FakeVenueRepository venues;
   final FakeBookingRepository bookings;
+  final FakeLocationService location;
 }
 
 Future<Fakes> pumpApp(
@@ -1223,12 +1317,18 @@ Future<Fakes> pumpApp(
   List<Ground> grounds = const [],
   List<GroundBooking> bookings = const [],
   List<VenueReview> venueReviews = const [],
+  GeoPoint? myPosition, // where the phone is
+  bool locationAllowed = false, // the app may already use it
+  bool locationAskedBefore = true, // false: first launch, when the app asks once by itself
 }) async {
   // A phone-sized screen (iPhone 16).
   tester.view.physicalSize = const Size(1179, 2556);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  SharedPreferences.setMockInitialValues(savedSettings);
+  SharedPreferences.setMockInitialValues({
+    if (locationAskedBefore) MyPosition.askedKey: true,
+    ...savedSettings,
+  });
 
   directory ??= FakeDirectoryRepository();
   final venueFake = FakeVenueRepository(
@@ -1262,6 +1362,7 @@ Future<Fakes> pumpApp(
     push: FakePushRepository(),
     venues: venueFake,
     bookings: FakeBookingRepository(venueFake.bookings, venueFake),
+    location: FakeLocationService(position: myPosition, allowed: locationAllowed),
   );
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -1280,6 +1381,7 @@ Future<Fakes> pumpApp(
       pushRepositoryProvider.overrideWithValue(fakes.push),
       venueRepositoryProvider.overrideWithValue(fakes.venues),
       bookingRepositoryProvider.overrideWithValue(fakes.bookings),
+      locationServiceProvider.overrideWithValue(fakes.location),
     ],
     child: const BhutanServicesApp(),
   ));

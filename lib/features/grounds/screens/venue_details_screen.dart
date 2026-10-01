@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/location/location_service.dart';
+import '../../../core/location/my_position.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
@@ -14,6 +16,7 @@ import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/info_note.dart';
+import '../../../shared/widgets/location_problem.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/star_rating.dart';
 import '../../admin/providers/admin_providers.dart';
@@ -27,7 +30,8 @@ import '../widgets/week_timings.dart';
 
 /// A venue's page
 /// Purpose: Show customers the grounds, prices, each day's hours and reviews,
-/// so they can choose a ground and book it, or call the venue. Visitors who
+/// so they can choose a ground and book it, or call the venue; how far away
+/// it is and directions in Google Maps, once it's on the map. Visitors who
 /// haven't logged in see all of it too.
 /// Backend: Reads venue_directory (or venues, for its manager and admins),
 /// grounds with their opening hours, and venue_reviews.
@@ -158,16 +162,28 @@ class _VenuePage extends ConsumerWidget {
   }
 }
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   final Venue venue;
   final bool showStatus; // the manager and admins see where it stands
 
   const _Header({required this.venue, required this.showStatus});
 
+  /// Finds the phone, asking to use its location the first time.
+  Future<void> _locate(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(myPositionProvider.notifier).locate();
+    } on LocationUnavailable catch (e) {
+      if (context.mounted) showLocationProblem(context, ref.read(locationServiceProvider), e.problem);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final place = venue.coordinates;
+    final position = ref.watch(myPositionProvider);
+    final here = position.valueOrNull;
 
     return Card(
       child: Column(
@@ -195,6 +211,41 @@ class _Header extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (place != null) ...[
+                  const SizedBox(height: 4),
+                  if (here != null)
+                    Row(
+                      children: [
+                        const Icon(Icons.near_me_rounded, size: 18, color: AppColors.primaryDeep),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            AppStrings.distanceFromYou(here.distanceKm(place)),
+                            style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    // The phone's place isn't known yet: asks to use it, here where it's wanted.
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: position.isLoading
+                          ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.near_me_rounded, size: 18),
+                      label: const Text(AppStrings.showDistance),
+                      onPressed: position.isLoading ? null : () => _locate(context, ref),
+                    ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.directions_rounded),
+                    label: const Text(AppStrings.directions),
+                    onPressed: () => openDirections(context, place),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -265,13 +316,24 @@ class _GroundCard extends StatelessWidget {
                 if (!ground.isActive) const StatusPill(label: AppStrings.paused, color: AppColors.unavailable),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              AppStrings.groundPrice(ground.pricePerHourNu,
+            const SizedBox(height: 14),
+            // One price all day, or the day and night prices one under the other.
+            Semantics(
+              label: AppStrings.groundPrice(ground.pricePerHourNu,
                   eveningPrice: ground.eveningPriceNu, eveningFrom: ground.eveningFromHour),
-              style: const TextStyle(color: AppColors.primaryDeep, fontWeight: FontWeight.w700),
+              excludeSemantics: true,
+              child: switch (ground.eveningPriceNu) {
+                null => Align(alignment: Alignment.centerLeft, child: PricePerHour(ground.pricePerHourNu, size: 22)),
+                final night => Column(
+                    children: [
+                      _PriceLine(label: AppStrings.dayPrice, price: ground.pricePerHourNu),
+                      const SizedBox(height: 6),
+                      _PriceLine(label: AppStrings.nightPriceFrom(ground.eveningFromHour), price: night),
+                    ],
+                  ),
+              },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             if (ground.slots.isEmpty)
               const InfoNote(icon: Icons.schedule_rounded, text: AppStrings.noTimingsYet)
             else
@@ -287,6 +349,28 @@ class _GroundCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 'Night, from 6 pm ........ Nu. 1,500 /hour'
+class _PriceLine extends StatelessWidget {
+  final String label;
+  final int price;
+
+  const _PriceLine({required this.label, required this.price});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Expanded(
+          child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.inkSoft)),
+        ),
+        PricePerHour(price),
+      ],
     );
   }
 }

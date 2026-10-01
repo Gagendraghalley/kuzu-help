@@ -38,6 +38,23 @@ class VenueRepository {
     return rows.map(Venue.fromJson).toList();
   }
 
+  /// Listed sports venues anywhere in Bhutan whose name, town or dzongkhag
+  /// contains [query], best rated first.
+  Future<List<Venue>> searchVenues(String query) async {
+    // Characters with a meaning in the search pattern can't be searched for.
+    final term = query.replaceAll(RegExp(r'[,()*%"\\]'), ' ').trim();
+    if (term.isEmpty) return [];
+    final rows = await _db
+        .from('venue_directory')
+        .select()
+        .eq('venue_type', VenueType.sportsGround)
+        .or('name.ilike.*$term*,town.ilike.*$term*,dzongkhag.ilike.*$term*')
+        .order('avg_rating')
+        .order('review_count')
+        .limit(50);
+    return rows.map(Venue.fromJson).toList();
+  }
+
   /// A venue's page, with all its grounds. Customers, and visitors who
   /// haven't logged in, see listed venues; the manager sees theirs and admins
   /// any, with its manager and, when it's listed, its rating. Null when this

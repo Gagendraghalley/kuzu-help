@@ -1,4 +1,5 @@
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/geo_utils.dart';
 
 /// A venue: one row of the venue_directory view (listed venues, what
 /// customers see), or, for its manager and admins, of the venues table with
@@ -19,6 +20,7 @@ class Venue {
   final int freeCancelHours;
   final String? cancellationPolicy;
   final String? paymentInfo; // how to pay an advance, e.g. an mBoB account
+  final GeoPoint? coordinates; // its place on the map; null until its manager sets it
   // venue_directory only:
   final int? fromPriceNu; // the cheapest ground's hourly price
   final int groundCount;
@@ -48,6 +50,7 @@ class Venue {
     this.freeCancelHours = 24,
     this.cancellationPolicy,
     this.paymentInfo,
+    this.coordinates,
     this.fromPriceNu,
     this.groundCount = 0,
     this.sports = const [],
@@ -68,6 +71,8 @@ class Venue {
   /// A venue_directory row (listed), or a venues row selected with [columns].
   factory Venue.fromJson(Map<String, dynamic> json) {
     final manager = json['manager'] as Map<String, dynamic>?;
+    final latitude = (json['latitude'] as num?)?.toDouble();
+    final longitude = (json['longitude'] as num?)?.toDouble();
     return Venue(
       id: json['id'] as String,
       managerId: json['manager_id'] as String?,
@@ -84,6 +89,7 @@ class Venue {
       freeCancelHours: json['free_cancel_hours'] as int? ?? 24,
       cancellationPolicy: json['cancellation_policy'] as String?,
       paymentInfo: json['payment_info'] as String?,
+      coordinates: latitude == null || longitude == null ? null : GeoPoint(latitude, longitude),
       fromPriceNu: json['from_price_nu'] as int?,
       groundCount: json['ground_count'] as int? ?? 0,
       sports: (json['sports'] as List?)?.cast<String>() ?? const [],
@@ -121,6 +127,7 @@ class VenueDraft {
   final int freeCancelHours;
   final String? cancellationPolicy;
   final String? paymentInfo;
+  final GeoPoint? coordinates; // null: not on the map (or no longer)
 
   const VenueDraft({
     required this.name,
@@ -134,6 +141,7 @@ class VenueDraft {
     this.freeCancelHours = 24,
     this.cancellationPolicy,
     this.paymentInfo,
+    this.coordinates,
   });
 
   Map<String, dynamic> toJson() => {
@@ -148,5 +156,7 @@ class VenueDraft {
         'free_cancel_hours': freeCancelHours,
         'cancellation_policy': cancellationPolicy,
         'payment_info': paymentInfo,
+        'latitude': coordinates?.latitude,
+        'longitude': coordinates?.longitude,
       };
 }

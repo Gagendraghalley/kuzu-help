@@ -62,6 +62,13 @@ class ProfileRepository {
     await _db.rpc('add_my_role', params: {'new_role': role});
   }
 
+  /// Just signed up with Google: the new account, made a customer, becomes
+  /// [role] (UserRole.worker or UserRole.player) as picked on Welcome
+  /// (claim_signup_role). Does nothing for an account that isn't new.
+  Future<void> claimSignUpRole(String role) async {
+    await _db.rpc('claim_signup_role', params: {'new_role': role});
+  }
+
   /// D1 'Become a worker': customer -> worker only (schema.sql, section 4).
   Future<void> becomeWorker() async {
     await _db.rpc('become_worker');

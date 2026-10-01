@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:google_sign_in/google_sign_in.dart' show GoogleSignInException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../strings/app_strings.dart';
@@ -25,9 +27,17 @@ class ErrorMessages {
         return AppStrings.tooManyAttempts;
       }
       if (code == ErrorCode.validationFailed.code) return AppStrings.invalidEmail;
+      // Google isn't turned on in Supabase (README).
+      if (code == ErrorCode.providerDisabled.code) return AppStrings.googleSignInFailed;
     }
-    // A database function or table the app uses isn't there (see supabase/updates.sql).
-    if (error is PostgrestException && (error.code == 'PGRST202' || error.code == 'PGRST205')) {
+    // Google's account picker failed (not closed: that's no error), or
+    // couldn't open: on iPhones, a missing URL scheme in Info.plist (README).
+    if (error is GoogleSignInException || (error is PlatformException && error.code == 'google_sign_in')) {
+      return AppStrings.googleSignInFailed;
+    }
+    // A database function, table or column the app uses isn't there (see supabase/updates.sql).
+    if (error is PostgrestException &&
+        (error.code == 'PGRST202' || error.code == 'PGRST204' || error.code == 'PGRST205')) {
       return AppStrings.databaseUpdateNeeded;
     }
     // The delete-account Edge Function isn't deployed (see the README).

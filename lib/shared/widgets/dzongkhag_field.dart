@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/dzongkhags.dart';
 import '../../core/strings/app_strings.dart';
+import 'choice_sheet.dart';
 
-/// Dropdown of the 20 dzongkhags for forms (B1, D1).
+/// The 20 dzongkhags for forms (B1, D1): looks like a dropdown, and opens a
+/// list to pick from, narrowed by typing a name, another spelling or a town.
 class DzongkhagField extends StatelessWidget {
   final String? initialValue;
   final ValueChanged<String?> onChanged;
@@ -18,16 +20,38 @@ class DzongkhagField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
+    return FormField<String>(
       initialValue: kDzongkhags.contains(initialValue) ? initialValue : null,
-      items: [for (final d in kDzongkhags) DropdownMenuItem(value: d, child: Text(d))],
-      onChanged: onChanged,
-      menuMaxHeight: 400,
-      icon: const Icon(Icons.keyboard_arrow_down_rounded),
-      borderRadius: BorderRadius.circular(16),
-      dropdownColor: Colors.white,
-      decoration: const InputDecoration(labelText: AppStrings.dzongkhag),
       validator: required ? (v) => v == null ? AppStrings.chooseDzongkhag : null : null,
+      builder: (field) {
+        final value = field.value;
+        return InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            final choice = await showChoiceSheet<String>(
+              context,
+              title: AppStrings.dzongkhag,
+              options: kDzongkhags,
+              selected: value,
+              labelOf: (d) => d,
+              searchHint: AppStrings.searchDzongkhags,
+              searchTermsOf: dzongkhagSearchTerms,
+            );
+            if (choice == null) return;
+            field.didChange(choice);
+            onChanged(choice);
+          },
+          child: InputDecorator(
+            isEmpty: value == null,
+            decoration: InputDecoration(
+              labelText: AppStrings.dzongkhag,
+              errorText: field.errorText,
+              suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
+            ),
+            child: value == null ? null : Text(value),
+          ),
+        );
+      },
     );
   }
 }

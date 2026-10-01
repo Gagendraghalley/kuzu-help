@@ -64,7 +64,7 @@ void main() {
 
     await tapAndSettle(tester, 'Plumber');
     expect(find.text('Pema Dorji'), findsOneWidget);
-    expect(find.text('Nu 500 per visit'), findsOneWidget);
+    expect(find.text('Nu. 500 per visit'), findsOneWidget); // as typed: 'Nu 500 per visit'
     expect(find.text('Karma Wangdi'), findsNothing); // Paro
     expect(find.text('Sonam Choden'), findsNothing); // electrician
     expect(find.text('Dechen Wangmo'), findsNothing); // not approved yet
@@ -91,6 +91,29 @@ void main() {
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('selected_dzongkhag'), kAllDzongkhags);
+  });
+
+  testWidgets('the dzongkhag list narrows as you type: a name, another spelling or a town', (tester) async {
+    await openHome(tester);
+    await tapAndSettle(tester, 'Thimphu'); // 'Your area'
+    final typing = find.descendant(of: find.byType(BottomSheet), matching: find.byType(TextField));
+
+    await tester.enterText(typing, 'phuents');
+    await tester.pumpAndSettle();
+    expect(find.text('Chhukha'), findsOneWidget);
+    expect(find.text('Phuentsholing'), findsOneWidget); // why it's there
+    expect(find.text('Paro'), findsNothing);
+
+    await tester.enterText(typing, 'xyz');
+    await tester.pumpAndSettle();
+    expect(find.text(AppStrings.nothingMatches('xyz')), findsOneWidget);
+
+    await tester.enterText(typing, 'wangdi');
+    await tester.pumpAndSettle();
+    await tapAndSettle(tester, 'Wangdue Phodrang');
+    expect(find.text('Wangdue Phodrang'), findsOneWidget); // now 'Your area'
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('selected_dzongkhag'), 'Wangdue Phodrang');
   });
 
   testWidgets('C2 says so when there is nobody in that dzongkhag yet', (tester) async {
@@ -129,7 +152,7 @@ void main() {
 
     await tester.dragUntilVisible(
         find.text(pemasReview.comment!), find.byType(Scrollable).first, const Offset(0, -250));
-    expect(find.text('Nu 500 per visit'), findsOneWidget);
+    expect(find.text('Nu. 500 per visit'), findsOneWidget); // as typed: 'Nu 500 per visit'
     expect(find.text(pemasReview.comment!), findsOneWidget);
   });
 

@@ -13,9 +13,8 @@ import '../../../shared/widgets/error_view.dart';
 import '../../../shared/widgets/icon_tile.dart';
 import '../../../shared/widgets/info_note.dart';
 import '../../../shared/widgets/loading_view.dart';
+import '../../../shared/widgets/search_box_button.dart';
 import '../../../shared/widgets/section_header.dart';
-import '../../grounds/providers/booking_providers.dart';
-import '../../grounds/providers/venue_providers.dart';
 import '../../grounds/screens/venue_list_screen.dart';
 import '../../notifications/widgets/notifications_button.dart';
 import '../../profile/providers/profile_providers.dart';
@@ -26,6 +25,9 @@ import '../widgets/dzongkhag_selector.dart';
 
 /// The services Customer Home offers; one shows at a time.
 enum HomeService { homeServices, sportsGrounds, partyDining }
+
+/// Party & dining is hidden until it's ready; set to true to show its tile again.
+const showPartyDining = false;
 
 /// Which service Customer Home shows. Home services until the customer picks another.
 final homeServiceProvider = StateProvider<HomeService>((ref) => HomeService.homeServices);
@@ -50,8 +52,7 @@ class CustomerHomeScreen extends ConsumerWidget {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () => switch (service) {
-            HomeService.sportsGrounds =>
-              Future.wait([ref.refresh(venuesProvider.future), ref.refresh(myBookingsProvider.future)]),
+            HomeService.sportsGrounds => refreshSportsGrounds(ref),
             _ => ref.refresh(categoriesProvider.future),
           },
           child: ListView(
@@ -77,7 +78,10 @@ class CustomerHomeScreen extends ConsumerWidget {
                     ),
                     if (service == HomeService.homeServices) ...[
                       const SizedBox(height: 18),
-                      const _SearchBox(),
+                      const SearchBoxButton(hint: AppStrings.searchWorkers, route: Routes.searchWorkers),
+                    ] else if (service == HomeService.sportsGrounds) ...[
+                      const SizedBox(height: 18),
+                      const SearchBoxButton(hint: AppStrings.searchGrounds, route: Routes.searchGrounds),
                     ],
                   ],
                 ),
@@ -101,40 +105,8 @@ class CustomerHomeScreen extends ConsumerWidget {
   }
 }
 
-/// Looks like a search box; the search itself is its own screen.
-class _SearchBox extends StatelessWidget {
-  const _SearchBox();
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Semantics(
-      button: true,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => context.push(Routes.searchWorkers),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.search_rounded, color: AppColors.primaryDeep),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(AppStrings.searchWorkers, style: text.bodyLarge?.copyWith(color: AppColors.muted)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Three big tiles: Home services, Sports grounds, Party & dining (soon).
+/// Big tiles: Home services, Sports grounds, and Party & dining (soon) when
+/// [showPartyDining] is on.
 class _ServicePicker extends ConsumerWidget {
   const _ServicePicker();
 
@@ -164,16 +136,18 @@ class _ServicePicker extends ConsumerWidget {
               onTap: () => select(HomeService.sportsGrounds),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _ServiceTile(
-              icon: Icons.celebration_rounded,
-              label: AppStrings.partyDining,
-              badge: AppStrings.comingSoon,
-              selected: selected == HomeService.partyDining,
-              onTap: () => select(HomeService.partyDining),
+          if (showPartyDining) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ServiceTile(
+                icon: Icons.celebration_rounded,
+                label: AppStrings.partyDining,
+                badge: AppStrings.comingSoon,
+                selected: selected == HomeService.partyDining,
+                onTap: () => select(HomeService.partyDining),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

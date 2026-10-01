@@ -22,6 +22,19 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- Continue with Google: the iOS client's 'iOS URL scheme' from Google Cloud
+	     (README, 'Sign in with Google'). -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.1030947700667-d71boejsd8gkj2q5j9psdmhn9f6j09pc</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
@@ -31,6 +44,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo for your profile or identity verification.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Show workers and sports grounds in your dzongkhag and how far grounds are from you, and let ground managers mark where their ground is.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a photo for your profile or identity verification.</string>
 	<key>UILaunchStoryboardName</key>

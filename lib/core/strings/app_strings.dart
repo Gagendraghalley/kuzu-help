@@ -1,4 +1,5 @@
 import '../constants/app_constants.dart';
+import '../location/location_service.dart';
 import '../utils/bhutan_time.dart';
 import '../utils/price_utils.dart';
 
@@ -8,16 +9,19 @@ class AppStrings {
   static const appName = 'Kuzu Help';
 
   // Welcome (A2)
-  static const tagline = 'Find trusted local workers near you';
-  static const needService = 'I need a service';
-  static const needServiceHint = 'Find a plumber, electrician, carpenter and more';
-  static const offerService = 'I offer a service';
-  static const offerServiceHint = 'Get more customers for your skills';
-  static const newToKuzuHelp = 'New to Kuzu Help? Create a free account:';
+  static const welcomeTitle = 'Local help you can trust';
+  static const tagline = 'Book verified workers and sports grounds near you, all in one app.';
+  static const trustVerified = 'Verified';
+  static const trustReviews = 'Real reviews';
+  static const trustNearby = 'Near you';
+  static const whatToDo = 'What would you like to do?';
+  static const needService = 'Find a service';
+  static const needServiceHint = 'Plumbers, electricians, carpenters and more';
+  static const browseGrounds = 'Book a ground';
+  static const browseGroundsHint = 'Futsal and football. No account needed to look';
+  static const offerService = 'Offer your services';
+  static const offerServiceHint = 'Join as a worker and get more customers';
   static const alreadyHaveAccount = 'Already have an account?';
-  static const lookingForGround = 'Looking for a ground to play?';
-  static const browseGrounds = 'Browse sports grounds';
-  static const browseGroundsHint = 'See grounds, prices and free times. No account needed.';
 
   // Login (A3, A4, A5)
   static const signUpTitle = 'Create your account';
@@ -47,6 +51,10 @@ class AppStrings {
         _ => 'You are signing up to find workers.',
       };
   static const newHereCreateAccount = 'New to Kuzu Help? Create an account';
+  static const continueWithGoogle = 'Continue with Google';
+  static const orUseEmail = 'or use your email';
+  static const googleSignInFailed =
+      "Couldn't sign in with Google. Please try again, or use your email.";
   static const alreadyRegisteredTitle = 'This email is already registered';
   static const alreadyRegisteredHelp = 'Log in with this email and your password instead. '
       "Forgot your password? Tap 'Forgot password?' on the log in screen.";
@@ -68,7 +76,7 @@ class AppStrings {
       "For your safety, please log out and use 'Forgot password?' to change your password.";
   static const noAccountFound =
       'No account uses this email yet. Go back and choose '
-      '"I need a service" or "I offer a service" to sign up.';
+      '"$needService" or "$offerService" to sign up.';
   static const verifyTitle = 'Check your email';
   static String codeSentTo(String email) => 'Enter the 6-digit code we sent to $email';
   static const enterCode = 'Enter the 6-digit code';
@@ -255,6 +263,8 @@ class AppStrings {
   static const whatDoYouNeed = 'What do you need help with?';
   static const yourArea = 'Your area';
   static const chooseArea = 'Choose your dzongkhag';
+  static const searchDzongkhags = 'Type a dzongkhag or town';
+  static String nothingMatches(String typed) => 'Nothing matches "$typed".';
   static const trustNote = 'Every worker is checked by our team before they appear here.';
   static const noServicesYet = 'No services are listed yet – check back soon.';
 
@@ -441,23 +451,63 @@ class AppStrings {
       : 'No sports grounds in this area yet – check back soon';
   static String noVenuesForSport(String sport) =>
       'No ${sportLabel(sport).toLowerCase()} grounds here yet. Try "$allSports".';
-  static String fromPricePerHour(int price) => 'From ${PriceUtils.nu(price)} an hour';
+  static const searchGrounds = 'Search grounds by name or place';
+  static const typeToSearchGrounds = 'Type at least 2 letters of a ground\'s name, town or dzongkhag.';
+  static String noVenuesNamed(String query) => 'No sports grounds match "$query" yet.';
+  static String fromPricePerHour(int price) => 'From ${PriceUtils.nu(price)} an hour'; // read aloud
+  static const priceFrom = 'From';
+  static const perHour = '/hour';
   static const instantBooking = 'Instant booking';
   static const myBookings = 'My bookings';
   static const venuesCheckedNote = 'Every ground is checked by our team before it appears here.';
+
+  // Sports grounds: how far away, and directions
+  static const nearestFirst = 'Nearest first';
+  static const showDistance = 'How far is it from me?';
+  static const distancePrompt = 'See how far each ground is';
+  static const distancePromptHint = 'Tap to use your location';
+  static String distanceAway(double km) => '${_distance(km)} away';
+  static String distanceFromYou(double km) => 'About ${_distance(km)} from you in a straight line';
+  static String _distance(double km) {
+    final metres = (km * 20).round() * 50; // to the nearest 50 m
+    if (metres < 1000) return '${metres < 50 ? 50 : metres} m';
+    return km < 10 ? '${km.toStringAsFixed(1)} km' : '${km.round()} km';
+  }
+  static const directions = 'Directions in Google Maps';
+  static const directionsShort = 'Directions';
+  static const cannotOpenMaps = 'Could not open Google Maps on this device.';
+  static String locationProblem(LocationProblem problem) => switch (problem) {
+        LocationProblem.serviceOff => 'Location is off on this phone. Turn it on, then try again.',
+        LocationProblem.denied => 'Allow Kuzu Help to use your location, then try again.',
+        LocationProblem.deniedForever => 'Kuzu Help may not use your location. Allow it in Settings.',
+        LocationProblem.unavailable => 'Could not find where you are. Please try again in a moment.',
+        LocationProblem.outsideBhutan => "You don't seem to be in Bhutan, so distances to grounds aren't shown.",
+      };
+  static const openSettings = 'Settings';
 
   // Sports grounds: a venue's page
   static const venueNotListed = 'This ground is not taking bookings right now.';
   static const book = 'Book';
   static String groundPrice(int price, {int? eveningPrice, required int eveningFrom}) => [
-        '${PriceUtils.nu(price)} an hour',
-        if (eveningPrice != null) '${PriceUtils.nu(eveningPrice)} an hour at night, from ${hourLabel(eveningFrom)}',
+        '${PriceUtils.nu(price)}$perHour',
+        if (eveningPrice != null) '${PriceUtils.nu(eveningPrice)}$perHour at night, from ${hourLabel(eveningFrom)}',
       ].join(' · ');
+  static const dayPrice = 'Day';
+  static String nightPriceFrom(int hour) => 'Night, from ${hourLabel(hour)}';
   static const everyDay = 'Every day';
   /// 'Mon', or 'Mon – Fri' (0 = Sunday).
   static String weekdays(int from, int to) =>
       from == to ? weekdayName(from) : '${weekdayName(from)} – ${weekdayName(to)}';
   static String hoursRange(int openHour, int closeHour) => '${hourLabel(openHour)} – ${hourLabel(closeHour)}';
+
+  /// A time on the timetable, as short as reads clearly: '6 – 8 pm',
+  /// '12 – 2 pm', but '10 pm – 12 am' and '11 am – 1 pm'.
+  static String hoursShort(int startHour, int endHour) {
+    final start = hourLabel(startHour);
+    final end = hourLabel(endHour);
+    final sameHalf = start.endsWith(end.substring(end.length - 2));
+    return sameHalf ? '${start.substring(0, start.length - 3)} – $end' : '$start – $end';
+  }
   static const indoor = 'Indoor';
   static const outdoor = 'Outdoor';
   static const floodlights = 'Floodlights';
@@ -576,6 +626,23 @@ class AppStrings {
   static const enterVenueName = 'Please enter the name of the ground';
   static const venueAddress = 'Address or landmark (optional)';
   static const venueAddressHint = 'e.g. Behind the Changlimithang stadium';
+  static const mapLocation = 'Location on the map (optional)';
+  static const mapLocationHint = 'Customers see how far away the ground is and get directions. Stand at the '
+      'ground and use your location, or paste its link from Google Maps (Share, then Copy link).';
+  static const notOnMapYet = 'Not on the map yet';
+  static const onTheMap = 'On the map';
+  static const useMyLocation = 'Use my current location';
+  static const pasteMapsLink = 'Paste a Google Maps link';
+  static const mapsLinkTitle = 'Google Maps link';
+  static const mapsLinkHint = 'https://maps.app.goo.gl/... or 27.4728, 89.6390';
+  static const useLink = 'Use this link';
+  static const pasteLinkFirst = 'Paste the link from Google Maps here.';
+  static const mapsLinkNoPlace = "That link doesn't show a place. In Google Maps, drop a pin on the ground, "
+      'tap Share, then Copy link.';
+  static const notInBhutan = "That place isn't in Bhutan. Check the link, or stand at the ground and use your "
+      'location.';
+  static const checkOnMap = 'Check on Google Maps';
+  static const removeFromMap = 'Take off the map';
   static const venuePhone = 'Phone for bookings';
   static const venueWhatsapp = 'WhatsApp number (optional)';
   static const venueAbout = 'About the ground (optional)';

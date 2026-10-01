@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 
-/// The brand's roof over the Welcome, log in and sign-up screens (A2–A5):
+/// The brand's roof over the log in, sign-up and password screens (A3–A5):
 /// the logo's orange-to-maroon gradient under a faint lattice of the diamonds
 /// beneath the logo, and a bottom edge that sweeps up at both ends like a
 /// dzong's eaves, with a gold trim. [child] sits on it; its text is white.

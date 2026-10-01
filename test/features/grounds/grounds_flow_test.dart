@@ -1,16 +1,26 @@
 import 'package:bhutan_services/core/constants/app_constants.dart';
 import 'package:bhutan_services/core/router/route_names.dart';
 import 'package:bhutan_services/core/strings/app_strings.dart';
+import 'package:bhutan_services/core/location/location_service.dart';
+import 'package:bhutan_services/core/location/my_position.dart';
 import 'package:bhutan_services/core/utils/bhutan_time.dart';
+import 'package:bhutan_services/core/utils/geo_utils.dart';
+import 'package:bhutan_services/core/utils/price_utils.dart';
+import 'package:bhutan_services/features/customer/screens/customer_home_screen.dart';
 import 'package:bhutan_services/features/grounds/screens/player_home_screen.dart';
 import 'package:bhutan_services/features/grounds/widgets/day_strip.dart';
+import 'package:bhutan_services/features/grounds/widgets/venue_card.dart';
+import 'package:bhutan_services/shared/widgets/choice_sheet.dart';
+import 'package:bhutan_services/shared/widgets/dzongkhag_field.dart';
 import 'package:bhutan_services/shared/models/ground.dart';
 import 'package:bhutan_services/shared/models/ground_booking.dart';
 import 'package:bhutan_services/shared/models/regular_booking.dart';
 import 'package:bhutan_services/shared/models/venue.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/fakes.dart';
 
@@ -32,6 +42,7 @@ Future<Fakes> openHome(
   String? manager = 'tashi',
   List<GroundBookingSeed> seeds = const [],
   bool withGround = true,
+  GeoPoint? myPosition, // where the phone is, once the app may use it
 }) {
   final v = venue(manager: manager);
   final g = ground();
@@ -44,6 +55,7 @@ Future<Fakes> openHome(
     venues: [v, venue(id: 'venue-paro', name: 'Paro Arena', dzongkhag: 'Paro')],
     grounds: [if (withGround) g, ground(id: 'ground-paro', venueId: 'venue-paro')],
     bookings: [for (final seed in seeds) seed(v, g)],
+    myPosition: myPosition,
   );
 }
 
@@ -65,7 +77,7 @@ String times(int start, int end) => AppStrings.hoursRange(start, end);
 Future<void> fillInVenueAndManager(WidgetTester tester) async {
   await enterField(tester, AppStrings.venueName, 'Dechen Futsal');
   await tester.pumpAndSettle();
-  final dzongkhag = find.byType(DropdownButtonFormField<String>).first; // then the type of ground
+  final dzongkhag = find.byType(DzongkhagField);
   await tester.ensureVisible(dzongkhag);
   await tester.pumpAndSettle();
   await tester.tap(dzongkhag);
@@ -92,7 +104,7 @@ GroundBooking karmasRequest(Venue v, Ground g) => groundBooking(
 
 void main() {
   group('customers', () {
-    testWidgets('Customer Home offers three services; Home services stays the default', (tester) async {
+    testWidgets('Customer Home offers its services; Home services stays the default', (tester) async {
       await openHome(tester);
       expect(find.text(AppStrings.whatDoYouNeed), findsOneWidget);
       expect(find.text('Plumber'), findsOneWidget);
@@ -100,15 +112,41 @@ void main() {
       await openSportsGrounds(tester);
       expect(find.text(AppStrings.bookAGround), findsOneWidget);
       expect(find.text('Changli Futsal'), findsOneWidget);
-      expect(find.text(AppStrings.fromPricePerHour(1000)), findsOneWidget);
+      expect(find.text(PriceUtils.nu(1000)), findsOneWidget); // From Nu. 1,000 /hour
       expect(find.text('Paro Arena'), findsNothing); // another dzongkhag
       expect(find.text('Plumber'), findsNothing);
 
-      await tapAndSettle(tester, AppStrings.partyDining);
-      expect(find.text(AppStrings.partyComingSoon), findsOneWidget);
+      if (showPartyDining) {
+        await tapAndSettle(tester, AppStrings.partyDining);
+        expect(find.text(AppStrings.partyComingSoon), findsOneWidget);
+      } else {
+        expect(find.text(AppStrings.partyDining), findsNothing);
+      }
 
       await tapAndSettle(tester, AppStrings.homeServices);
       expect(find.text('Plumber'), findsOneWidget);
+    });
+
+    testWidgets('search finds grounds by name or place in any dzongkhag', (tester) async {
+      await openHome(tester);
+      expect(find.text(AppStrings.searchGrounds), findsNothing); // Home services searches workers
+      await openSportsGrounds(tester);
+
+      await tapAndSettle(tester, AppStrings.searchGrounds);
+      expect(find.text(AppStrings.typeToSearchGrounds), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'arena');
+      await tester.pumpAndSettle();
+      expect(find.text('Paro Arena'), findsOneWidget); // Paro, though Thimphu is chosen
+      expect(find.text('Changli Futsal'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'thimphu');
+      await tester.pumpAndSettle();
+      expect(find.text('Changli Futsal'), findsOneWidget);
+      expect(find.text('Paro Arena'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'dechen');
+      await tester.pumpAndSettle();
+      expect(find.text(AppStrings.noVenuesNamed('dechen')), findsOneWidget);
     });
 
     testWidgets('a venue nobody runs yet is not listed', (tester) async {
@@ -121,15 +159,15 @@ void main() {
     testWidgets('a customer books one of the ground\'s evening times', (tester) async {
       final fakes = await openHome(tester);
       await openSportsGrounds(tester);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       expect(find.text(AppStrings.everyDay), findsOneWidget); // the same times every day
-      expect(find.text(times(18, 20)), findsOneWidget);
+      expect(find.text(AppStrings.hoursShort(18, 20)), findsOneWidget); // '6 – 8 pm'
       await scrollAndTap(tester, find.text(AppStrings.book));
       expect(find.text(AppStrings.bookGround), findsOneWidget);
 
       await tapAndSettle(tester, AppStrings.tomorrow);
       await scrollAndTap(tester, find.text(times(18, 20)));
-      expect(find.text('Nu 3,000'), findsOneWidget); // two evening hours at Nu 1,500
+      expect(find.text(PriceUtils.nu(3000)), findsOneWidget); // two evening hours at Nu. 1,500
       await enterField(tester, AppStrings.teamName, 'Changzamtog FC');
       await enterField(tester, AppStrings.jobPhone, '17999999');
       await tester.pumpAndSettle(); // the page stops scrolling to the field typed in
@@ -148,7 +186,7 @@ void main() {
         (v, g) => groundBooking(id: 'booking-2', venue: v, ground: g, start: tomorrowAt(20), hours: 2, bookedBy: 'pema'),
       ]);
       await openSportsGrounds(tester);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       await scrollAndTap(tester, find.text(AppStrings.book));
       await tapAndSettle(tester, AppStrings.tomorrow);
 
@@ -177,7 +215,7 @@ void main() {
             status: BookingStatus.confirmed),
       ]);
       await openSportsGrounds(tester);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       await scrollAndTap(tester, find.text(AppStrings.book));
       await tapAndSettle(tester, AppStrings.tomorrow);
       expect(find.text('${times(18, 20)} · Booked'), findsOneWidget);
@@ -189,7 +227,7 @@ void main() {
       fakes.venues.regulars.add(RegularBooking(
           id: 'regular-1', groundId: 'ground-1', weekday: tomorrow, startHour: 18, endHour: 20, name: 'Sonam'));
       await openSportsGrounds(tester);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       await scrollAndTap(tester, find.text(AppStrings.book));
       await tapAndSettle(tester, AppStrings.tomorrow);
 
@@ -203,7 +241,7 @@ void main() {
     testWidgets('customers can book up to one week ahead, and no further', (tester) async {
       await openHome(tester);
       await openSportsGrounds(tester);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       await scrollAndTap(tester, find.text(AppStrings.book));
       expect(find.text(AppStrings.bookUpToAWeek), findsOneWidget);
 
@@ -218,7 +256,7 @@ void main() {
       final fakes = await openHome(tester);
       fakes.bookings.takeNextBooking = true;
       await openSportsGrounds(tester);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       await scrollAndTap(tester, find.text(AppStrings.book));
       await tapAndSettle(tester, AppStrings.tomorrow);
       await scrollAndTap(tester, find.text(times(8, 10)));
@@ -238,7 +276,7 @@ void main() {
       await tapAndSettle(tester, AppStrings.myBookings);
       expect(find.text(AppStrings.bookingStatusLabel(BookingStatus.pending)), findsOneWidget);
 
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       await tapAndSettle(tester, AppStrings.cancelBooking);
       await tester.tap(find.widgetWithText(FilledButton, AppStrings.cancelBooking));
       await tester.pumpAndSettle();
@@ -256,7 +294,7 @@ void main() {
       await openSportsGrounds(tester);
       await tapAndSettle(tester, AppStrings.myBookings);
       await tapAndSettle(tester, AppStrings.past);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       await tapAndSettle(tester, AppStrings.writeReview);
 
       expect(find.text(AppStrings.howWasTheGround), findsOneWidget);
@@ -274,9 +312,9 @@ void main() {
       expect(find.text('Changli Futsal'), findsOneWidget);
       expect(find.text(AppStrings.myBookings), findsNothing);
 
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       expect(find.text(AppStrings.everyDay), findsOneWidget); // the same times every day
-      expect(find.text(times(20, 22)), findsOneWidget);
+      expect(find.text(AppStrings.hoursShort(20, 22)), findsOneWidget);
       expect(find.text(AppStrings.reviewVenueAfterPlaying), findsNothing);
 
       await scrollAndTap(tester, find.text(AppStrings.book));
@@ -317,6 +355,18 @@ void main() {
       expect(find.byType(PlayerHomeScreen), playerHome ? findsOneWidget : findsNothing);
       expect(find.text(AppStrings.whatDoYouNeed), playerHome ? findsNothing : findsOneWidget); // no home services
     }
+
+    testWidgets('a visitor searches grounds and opens one', (tester) async {
+      await openWelcome(tester);
+      await scrollAndTap(tester, find.text(AppStrings.browseGrounds));
+
+      await tapAndSettle(tester, AppStrings.searchGrounds);
+      expect(find.text(AppStrings.typeToSearchGrounds), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'changli');
+      await tester.pumpAndSettle();
+      await tapAndSettle(tester, 'Changli Futsal');
+      expect(find.text(AppStrings.everyDay), findsOneWidget); // its page, with its times
+    });
 
     testWidgets('a customer logs in from a ground, adds sports grounds to the account, and books', (tester) async {
       final fakes = await openWelcome(tester);
@@ -373,6 +423,32 @@ void main() {
       await expectBackOnChangli(tester, playerHome: true); // grounds, no home services
     });
 
+    testWidgets('a new player continues with Google from a ground and comes back to it', (tester) async {
+      final fakes = await openWelcome(tester, hasPassword: false); // made a customer by the database
+      fakes.profile.isNewAccount = true;
+      await browseToChangli(tester);
+
+      await scrollAndTap(tester, find.text(AppStrings.createAccountToBook));
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+
+      expect(fakes.profile.claimedRoles, [UserRole.player]);
+      expect(fakes.profile.profile.roles, [UserRole.player]); // a player's account, not a customer's
+      expect(find.text(AppStrings.createPasswordTitle), findsNothing);
+      await expectBackOnChangli(tester, playerHome: true);
+    });
+
+    testWidgets('a customer continues with Google from a ground: sports grounds are added', (tester) async {
+      final fakes = await openWelcome(tester); // an account from before
+      await browseToChangli(tester);
+
+      await scrollAndTap(tester, find.text(AppStrings.createAccountToBook));
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+
+      expect(fakes.profile.addedRoles, [UserRole.player]);
+      expect(fakes.profile.profile.role, UserRole.customer); // still a customer too
+      await expectBackOnChangli(tester);
+    });
+
     testWidgets('signing up from a ground with an email that has an account adds sports grounds to it',
         (tester) async {
       final fakes = await openWelcome(tester); // a customer's account
@@ -426,7 +502,7 @@ void main() {
       final router = GoRouter.of(tester.element(find.text('Changli Futsal')));
       router.push(Routes.myBookings);
       await tester.pumpAndSettle();
-      expect(find.text(AppStrings.newToKuzuHelp), findsOneWidget); // Welcome
+      expect(find.text(AppStrings.whatToDo), findsOneWidget); // Welcome
     });
   });
 
@@ -490,7 +566,7 @@ void main() {
     testWidgets('an admin removes a venue\'s manager, and it stops taking bookings', (tester) async {
       final fakes = await openHome(tester, role: UserRole.admin);
       await openSettingsItem(tester, AppStrings.sportsVenues);
-      await tapAndSettle(tester, 'Changli Futsal');
+      await scrollAndTap(tester, find.text('Changli Futsal'));
       expect(find.text('Tashi Dorji'), findsOneWidget);
 
       await scrollAndTap(tester, find.text(AppStrings.removeManager));
@@ -570,7 +646,7 @@ void main() {
             [(16, 18), (18, 20), (19, 21), (20, 22), (22, 24)], reason: 'day $day');
       }
       expect(find.text(AppStrings.timingsSaved), findsOneWidget);
-      expect(find.text(times(22, 24)), findsOneWidget); // on the ground's home
+      expect(find.text(AppStrings.hoursShort(22, 24)), findsOneWidget); // on the ground's home
       expect(find.text(times(8, 10)), findsNothing);
     });
 
@@ -634,6 +710,8 @@ void main() {
     testWidgets('a team plays every week: the manager holds that time for them, edits it, then removes it',
         (tester) async {
       final fakes = await openHome(tester, role: UserRole.groundManager, manager: me);
+      await tester.dragUntilVisible(
+          find.text(AppStrings.noRegularBookings), find.byType(Scrollable).first, const Offset(0, -250));
       expect(find.text(AppStrings.noRegularBookings), findsOneWidget);
       await scrollAndTap(tester, find.text(AppStrings.addRegularBooking));
       expect(tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, AppStrings.everyWeek)).value, isTrue);
@@ -838,6 +916,268 @@ void main() {
       await tapAndSettle(tester, 'New booking request from Karma Wangdi');
       expect(find.text(AppStrings.bookings), findsOneWidget);
       expect(find.text('Karma Wangdi · Changzamtog FC'), findsOneWidget);
+    });
+  });
+
+  group('where grounds are', () {
+    const changli = GeoPoint(27.4650, 89.6400);
+    const babesa = GeoPoint(27.4380, 89.6520);
+    const nearBabesa = GeoPoint(27.4400, 89.6500); // the phone
+
+    /// Changli Futsal and Babesa Futsal, both on the map, in Thimphu.
+    Future<Fakes> openGrounds(WidgetTester tester, {bool allowed = false, LocationProblem? problem}) async {
+      final fakes = await pumpApp(
+        tester,
+        roles: const [UserRole.player],
+        loggedIn: true,
+        hasPassword: true,
+        venues: [venue(coordinates: changli), venue(id: 'venue-babesa', name: 'Babesa Futsal', coordinates: babesa)],
+        grounds: [ground(), ground(id: 'ground-babesa', venueId: 'venue-babesa')],
+        myPosition: nearBabesa,
+        locationAllowed: allowed,
+      );
+      fakes.location.problem = problem;
+      await openSportsGrounds(tester);
+      return fakes;
+    }
+
+    void clearMessages(WidgetTester tester) =>
+        tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger)).clearSnackBars();
+
+    List<String> listed(WidgetTester tester) =>
+        [for (final card in tester.widgetList<VenueCard>(find.byType(VenueCard))) card.venue.name];
+    final toChangli = AppStrings.distanceAway(nearBabesa.distanceKm(changli));
+    final toBabesa = AppStrings.distanceAway(nearBabesa.distanceKm(babesa));
+
+    testWidgets('customers see how far each ground is, and the nearest first when they ask', (tester) async {
+      final fakes = await openGrounds(tester);
+      expect(listed(tester), ['Changli Futsal', 'Babesa Futsal']); // best rated first
+      expect(find.text(toBabesa), findsNothing); // not asked for the location yet
+
+      await scrollAndTap(tester, find.text(AppStrings.nearestFirst));
+      expect(fakes.location.asked, 1);
+      expect(listed(tester), ['Babesa Futsal', 'Changli Futsal']);
+      expect(find.text(toBabesa), findsOneWidget);
+      expect(find.text(toChangli), findsOneWidget);
+
+      await scrollAndTap(tester, find.text(AppStrings.nearestFirst));
+      expect(listed(tester), ['Changli Futsal', 'Babesa Futsal']);
+      expect(find.text(toChangli), findsOneWidget); // still shown
+    });
+
+    testWidgets('without the location, the list offers to use it; or the offer can be closed', (tester) async {
+      final fakes = await openGrounds(tester);
+      expect(find.text(AppStrings.distancePrompt), findsOneWidget);
+
+      await tapAndSettle(tester, AppStrings.distancePrompt);
+      expect(fakes.location.asked, 1);
+      expect(find.text(toBabesa), findsOneWidget);
+      expect(find.text(AppStrings.distancePrompt), findsNothing); // done its job
+    });
+
+    testWidgets('closing the offer hides it without asking', (tester) async {
+      final fakes = await openGrounds(tester);
+      await tester.tap(find.byTooltip(AppStrings.close));
+      await tester.pumpAndSettle();
+      expect(find.text(AppStrings.distancePrompt), findsNothing);
+      expect(fakes.location.asked, 0);
+      expect(find.text(AppStrings.nearestFirst), findsOneWidget); // still there to ask
+    });
+
+    testWidgets('once the app may use the location, distances show straight away', (tester) async {
+      final fakes = await openGrounds(tester, allowed: true);
+      expect(find.text(toBabesa), findsOneWidget);
+      expect(fakes.location.asked, 0);
+
+      await scrollAndTap(tester, find.text('Babesa Futsal'));
+      expect(find.text(AppStrings.distanceFromYou(nearBabesa.distanceKm(babesa))), findsOneWidget);
+      expect(find.text(AppStrings.directions), findsOneWidget);
+    });
+
+    testWidgets("a ground's page offers to show how far it is", (tester) async {
+      final fakes = await openGrounds(tester);
+      await scrollAndTap(tester, find.text('Babesa Futsal'));
+      expect(find.text(AppStrings.directions), findsOneWidget);
+      final fromHere = AppStrings.distanceFromYou(nearBabesa.distanceKm(babesa));
+      expect(find.text(fromHere), findsNothing);
+
+      await tapAndSettle(tester, AppStrings.showDistance);
+      expect(fakes.location.asked, 1);
+      expect(find.text(fromHere), findsOneWidget);
+      expect(find.text(AppStrings.showDistance), findsNothing);
+
+      await tester.pageBack(); // and on the list too
+      await tester.pumpAndSettle();
+      expect(find.text(toBabesa), findsOneWidget);
+    });
+
+    testWidgets('each card has Directions, straight to Google Maps', (tester) async {
+      // Stands in for url_launcher: the links the app opens.
+      final opened = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/url_launcher'), (call) async {
+        opened.add((call.arguments as Map)['url'] as String);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/url_launcher'), null));
+
+      await openGrounds(tester);
+      expect(find.text(AppStrings.directionsShort), findsNWidgets(2));
+
+      await scrollAndTap(tester, find.text(AppStrings.directionsShort).first); // Changli Futsal's
+      expect(opened, [changli.directionsUrl.toString()]);
+      expect(find.text(AppStrings.directions), findsNothing); // the ground's page didn't open
+    });
+
+    group('"Your area"', () {
+      const inParo = GeoPoint(27.4280, 89.4160);
+      Finder area(String dzongkhag) => find.widgetWithText(PillButton, dzongkhag);
+
+      Future<Fakes> openNearParo(WidgetTester tester, {bool askedBefore = true}) => pumpApp(
+            tester,
+            roles: const [UserRole.player],
+            loggedIn: true,
+            hasPassword: true,
+            venues: [venue(coordinates: changli), venue(id: 'venue-paro', name: 'Paro Arena', dzongkhag: 'Paro')],
+            grounds: [ground(), ground(id: 'ground-paro', venueId: 'venue-paro')],
+            myPosition: inParo,
+            locationAllowed: askedBefore,
+            locationAskedBefore: askedBefore,
+          );
+
+      testWidgets('starts as the dzongkhag the phone is in; one picked by hand stays', (tester) async {
+        await openNearParo(tester);
+        await openSportsGrounds(tester);
+        expect(area('Paro'), findsOneWidget);
+        expect(find.text('Paro Arena'), findsOneWidget);
+        expect(find.text('Changli Futsal'), findsNothing);
+
+        await tester.tap(area('Paro'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.descendant(of: find.byType(BottomSheet), matching: find.byType(TextField)), 'thim');
+        await tester.pumpAndSettle();
+        await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.text('Thimphu')));
+        await tester.pumpAndSettle();
+        expect(find.text('Changli Futsal'), findsOneWidget);
+
+        // Finding the phone again (pull to refresh) keeps the one picked.
+        await tester.fling(find.byType(Scrollable).first, const Offset(0, 400), 1000);
+        await tester.pumpAndSettle();
+        expect(area('Thimphu'), findsOneWidget);
+      });
+
+      testWidgets('the first time, the app asks for the location by itself, once', (tester) async {
+        final fakes = await openNearParo(tester, askedBefore: false);
+        expect(fakes.location.asked, 1);
+        await openSportsGrounds(tester);
+        expect(area('Paro'), findsOneWidget);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getBool(MyPosition.askedKey), isTrue); // not again
+      });
+    });
+
+    testWidgets('a phone outside Bhutan gets no distances, and is told why', (tester) async {
+      const sanFrancisco = GeoPoint(37.785834, -122.406417); // the iOS simulator's 'Apple' location
+      final fakes = await pumpApp(
+        tester,
+        roles: const [UserRole.player],
+        loggedIn: true,
+        hasPassword: true,
+        venues: [venue(coordinates: changli)],
+        grounds: [ground()],
+        myPosition: sanFrancisco,
+        locationAllowed: true,
+      );
+      await openSportsGrounds(tester);
+      expect(find.textContaining('km away'), findsNothing);
+
+      await scrollAndTap(tester, find.text(AppStrings.nearestFirst));
+      expect(fakes.location.asked, 1);
+      expect(find.text(AppStrings.locationProblem(LocationProblem.outsideBhutan)), findsOneWidget);
+      expect(find.textContaining('km away'), findsNothing);
+    });
+
+    testWidgets('pulling the list down finds the phone again', (tester) async {
+      final fakes = await openGrounds(tester, allowed: true);
+      expect(find.text(toBabesa), findsOneWidget);
+
+      fakes.location.position = changli; // walked over to Changli
+      await tester.fling(find.byType(Scrollable).first, const Offset(0, 400), 1000);
+      await tester.pumpAndSettle();
+      expect(find.text(AppStrings.distanceAway(0)), findsOneWidget);
+    });
+
+    testWidgets('a customer who said no to location is shown where to allow it', (tester) async {
+      final fakes = await openGrounds(tester, problem: LocationProblem.deniedForever);
+      await scrollAndTap(tester, find.text(AppStrings.nearestFirst));
+      expect(find.text(AppStrings.locationProblem(LocationProblem.deniedForever)), findsOneWidget);
+      expect(listed(tester), ['Changli Futsal', 'Babesa Futsal']);
+
+      await tester.tap(find.text(AppStrings.openSettings));
+      await tester.pumpAndSettle();
+      expect(fakes.location.settingsOpened, [LocationProblem.deniedForever]);
+    });
+
+    testWidgets('a ground not on the map has no distance or directions', (tester) async {
+      await openHome(tester, myPosition: nearBabesa);
+      await openSportsGrounds(tester);
+      expect(find.text(AppStrings.nearestFirst), findsNothing);
+      expect(find.text(AppStrings.directionsShort), findsNothing);
+      await scrollAndTap(tester, find.text('Changli Futsal'));
+      expect(find.text(AppStrings.directions), findsNothing);
+    });
+
+    testWidgets('a ground manager puts the ground on the map from where they stand', (tester) async {
+      final fakes = await openHome(tester, role: UserRole.groundManager, manager: me, myPosition: changli);
+      await scrollAndTap(tester, find.text(AppStrings.editVenue));
+      expect(find.text(AppStrings.notOnMapYet), findsOneWidget);
+
+      await scrollAndTap(tester, find.text(AppStrings.useMyLocation));
+      expect(find.text(AppStrings.onTheMap), findsOneWidget);
+      expect(find.text(changli.label), findsOneWidget);
+      await scrollAndTap(tester, find.text(AppStrings.save));
+      expect(fakes.venues.venues.first.coordinates, changli);
+
+      // The app may use the location now, so the ground's page shows how far it is.
+      clearMessages(tester);
+      await scrollAndTap(tester, find.text(AppStrings.seePublicVenue));
+      expect(find.text(AppStrings.distanceFromYou(0)), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      // Taken off the map again.
+      clearMessages(tester); // 'Saved' would cover the Save button
+      await scrollAndTap(tester, find.text(AppStrings.editVenue));
+      await scrollAndTap(tester, find.byTooltip(AppStrings.removeFromMap));
+      expect(find.text(AppStrings.notOnMapYet), findsOneWidget);
+      await scrollAndTap(tester, find.text(AppStrings.save));
+      expect(fakes.venues.venues.first.coordinates, isNull);
+    });
+
+    testWidgets('or pastes its Google Maps link, which must lead to a place in Bhutan', (tester) async {
+      final fakes = await openHome(tester, role: UserRole.groundManager, manager: me);
+      fakes.location.links['https://maps.app.goo.gl/Changli'] = changli;
+      await scrollAndTap(tester, find.text(AppStrings.editVenue));
+
+      Future<void> paste(String link) async {
+        await scrollAndTap(tester, find.text(AppStrings.pasteMapsLink));
+        await tester.enterText(find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)), link);
+        await tapAndSettle(tester, AppStrings.useLink);
+      }
+
+      await paste('https://maps.app.goo.gl/SomewhereElse'); // leads nowhere the app can read
+      expect(find.text(AppStrings.mapsLinkNoPlace), findsOneWidget);
+      clearMessages(tester);
+      await paste('https://maps.google.com/?q=27.7172,85.3240'); // Kathmandu
+      expect(find.text(AppStrings.notInBhutan), findsOneWidget);
+      clearMessages(tester);
+      expect(find.text(AppStrings.notOnMapYet), findsOneWidget);
+
+      await paste('https://maps.app.goo.gl/Changli');
+      expect(find.text(changli.label), findsOneWidget);
+      await scrollAndTap(tester, find.text(AppStrings.save));
+      expect(fakes.venues.venues.first.coordinates, changli);
     });
   });
 }
