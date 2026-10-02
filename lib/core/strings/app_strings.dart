@@ -972,6 +972,30 @@ class AppStrings {
   static const howManagersPay = 'How managers pay (optional)';
   static const howManagersPayHint = 'e.g. mBoB 200123456 (Kuzu Help). Send the journal number to 17123456.';
   static const billingSettingsSaved = 'Billing settings saved.';
+  /// 'Invoice KH-2026-00012 · emailed'.
+  static String invoiceLabel(String number, {required bool emailed}) =>
+      'Invoice $number${emailed ? ' · emailed' : ''}';
+  static const emailInvoice = 'Email the invoice to the manager';
+  static const invoiceEmailing = "Emailing the invoice to the manager. It shows 'emailed' here once it's sent.";
+  static const invoiceEmailsOff = "Invoice emails aren't set up yet: see 'Invoice emails' in the README.";
+  // Admins: Billing (Settings -> Billing), every ground's subscription and
+  // billing history in one place.
+  static const billing = 'Billing';
+  static const billingGrounds = 'Grounds';
+  static const billingRecords = 'History';
+  static const billingHidden = 'Hidden';
+  static const billingDueSoon = 'Due in 7 days';
+  /// 'Received in Oct'.
+  static String receivedIn(DateTime month) => 'Received in ${_months[month.month - 1]}';
+  static const billingAll = 'All';
+  static const billingToPay = 'To pay';
+  static const billingFree = 'Free';
+  /// 'To pay (3)'.
+  static String withCount(String label, int count) => '$label ($count)';
+  static const noGroundsHere = 'No grounds here.';
+  static const noBillingRecords = 'No free months, free time or payments yet.';
+  static const billingHint = 'Tap a ground to give or shorten its free time, change its fee, or see its billing '
+      'history.';
   static const subscriptionEndedError =
       "This ground's subscription has ended. Bookings can be added again once the next month is paid.";
 
@@ -1102,6 +1126,8 @@ class AppStrings {
         "${text('venue_name', 'Your ground')}'s ${_subscriptionNoun(data['kind'])} ends soon",
       NotificationTypes.subscriptionEnded => '${text('venue_name', 'Your ground')} is hidden from players',
       NotificationTypes.subscriptionLapsed => "${text('venue_name', 'A ground')}'s subscription ended",
+      NotificationTypes.subscriptionPaid => 'Payment recorded for ${text('venue_name', 'a ground')}',
+      NotificationTypes.subscriptionDue => 'Payment due soon: ${text('venue_name', 'a ground')}',
       _ => appName,
     };
   }
@@ -1174,8 +1200,10 @@ class AppStrings {
       NotificationTypes.bookingCompleted => 'Tap to leave a review.',
       NotificationTypes.venueReviewNew || NotificationTypes.venueReviewUpdated => 'Tap to see your reviews.',
       NotificationTypes.subscriptionUpdated => switch (data['kind']) {
-          SubscriptionKind.paid =>
-            [if (data['amount_nu'] case final int amount) PriceUtils.nu(amount), 'Paid$until.'].join(' · '),
+          SubscriptionKind.paid => [
+              [if (data['amount_nu'] case final int amount) PriceUtils.nu(amount), 'Paid$until.'].join(' · '),
+              if (data['invoice_number'] case final String invoice) 'Invoice $invoice.',
+            ].join(' '),
           SubscriptionKind.free => 'Listed for free$until.',
           _ => 'Listed for free$until. After that, '
               '${fee == null ? 'a monthly subscription' : feePerMonth(fee)} keeps it listed for players.',
@@ -1190,6 +1218,13 @@ class AppStrings {
         'Its ${_subscriptionNoun(data['kind'])} ended${lastDay == null ? '' : ' on $lastDay'}. ${payToListAgain(fee)}',
       NotificationTypes.subscriptionLapsed => "${lastDay == null ? '' : 'Last day: $lastDay. '}Players can't find "
           'it until you record a payment or give free time.',
+      NotificationTypes.subscriptionPaid => [
+          if (data['amount_nu'] case final int amount) PriceUtils.nu(amount),
+          if (data['payment_method'] case final String method) billingMethodLabel(method),
+          'Paid$until.',
+        ].join(' · '),
+      NotificationTypes.subscriptionDue => "${lastDay == null ? '' : 'Last day: $lastDay. '}Record the next month's "
+          "payment${fee == null ? '' : ' (${PriceUtils.nu(fee)})'} once they pay.",
       _ => '',
     };
   }

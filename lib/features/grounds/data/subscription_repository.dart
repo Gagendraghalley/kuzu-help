@@ -25,6 +25,14 @@ class SubscriptionRepository {
     return rows.map(SubscriptionPeriod.fromJson).toList();
   }
 
+  /// Admins (Billing): every ground's free months, free time and payments,
+  /// latest recorded first. Managers get only their own.
+  Future<List<SubscriptionPeriod>> getAllPeriods() async {
+    final rows =
+        await _db.from('venue_subscription_periods').select().order('created_at', ascending: false).limit(500);
+    return rows.map(SubscriptionPeriod.fromJson).toList();
+  }
+
   /// How managers pay, and the fee new grounds get.
   Future<SubscriptionSettings> getSettings() async {
     final row = await _db.from('subscription_settings').select().maybeSingle();
@@ -71,6 +79,12 @@ class SubscriptionRepository {
       'note': note,
     });
   }
+
+  /// Emails a payment's invoice to its ground's manager (again). Postgres
+  /// error KH503, saying what's missing, when invoice emails aren't set up
+  /// (README); false from a database from before that.
+  Future<bool> emailInvoice(String periodId) async =>
+      await _db.rpc('email_subscription_invoice', params: {'period': periodId}) == true;
 
   Future<void> setFee(String venueId, int? feeNu) async {
     await _db.rpc('set_subscription_fee', params: {'venue': venueId, 'fee': feeNu});

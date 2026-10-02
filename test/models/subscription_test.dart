@@ -93,6 +93,46 @@ void main() {
     });
   });
 
+  test('received this month: payments recorded in this Bhutan month', () {
+    SubscriptionPeriod period(DateTime recorded, int? amount) => SubscriptionPeriod(
+          id: 'p',
+          venueId: 'v1',
+          kind: amount == null ? SubscriptionKind.free : SubscriptionKind.paid,
+          startsAt: recorded,
+          endsAt: recorded.add(const Duration(days: 30)),
+          amountNu: amount,
+          paymentMethod: amount == null ? null : BillingMethod.cash,
+          createdAt: recorded,
+        );
+    final periods = [
+      period(bt(2026, 10, 1), 1500), // just after midnight on 1 Oct, Bhutan
+      period(bt(2026, 10, 20, 15), 2000),
+      period(bt(2026, 10, 21), null), // free time takes nothing in
+      period(bt(2026, 9, 30, 23, 59), 1500), // September
+    ];
+    expect(SubscriptionPeriod.receivedInMonth(periods, now: bt(2026, 10, 31, 12)), 3500);
+    expect(SubscriptionPeriod.receivedInMonth(periods, now: bt(2026, 11, 1)), 0);
+  });
+
+  test("a payment's invoice comes with its row", () {
+    final row = {
+      'id': 'p1',
+      'venue_id': 'v1',
+      'kind': 'paid',
+      'starts_at': '2026-10-02T18:00:00Z',
+      'ends_at': '2026-11-02T18:00:00Z',
+      'amount_nu': 1500,
+      'payment_method': 'mbob_transfer',
+      'invoice_number': 'KH-2026-00001',
+      'invoice_sent_at': '2026-10-02T09:30:00Z',
+      'created_at': '2026-10-02T09:29:00Z',
+    };
+    final p = SubscriptionPeriod.fromJson(row);
+    expect((p.invoiceNumber, p.invoiceSentAt), ('KH-2026-00001', DateTime.utc(2026, 10, 2, 9, 30)));
+    final notSent = SubscriptionPeriod.fromJson({...row, 'invoice_sent_at': null});
+    expect(notSent.invoiceSentAt, isNull);
+  });
+
   group('Venue.subscription', () {
     final managed = {
       'id': 'v1',

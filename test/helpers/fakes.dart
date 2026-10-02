@@ -996,6 +996,10 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
       periods.where((p) => p.venueId == venueId).toList();
 
   @override
+  Future<List<SubscriptionPeriod>> getAllPeriods() async =>
+      [...periods]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  @override
   Future<SubscriptionSettings> getSettings() async => settings;
 
   @override
@@ -1045,6 +1049,25 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
     }
     final latest = periods.where((p) => p.venueId == venueId).firstOrNull;
     venues.setSubscription(venueId, VenueSubscription(endsAt: end, kind: latest?.kind ?? s.kind, feeNu: s.feeNu));
+  }
+
+  /// Whether invoice emails are set up (README), and the payments whose
+  /// invoices admins asked to email.
+  bool invoiceEmailsOn = true;
+  final emailedInvoices = <String>[];
+
+  @override
+  Future<bool> emailInvoice(String periodId) async {
+    _adminOnly();
+    if (!periods.any((p) => p.id == periodId && p.kind == SubscriptionKind.paid)) {
+      throw const PostgrestException(message: 'No payment with this ID', code: 'P0002');
+    }
+    if (!invoiceEmailsOn) {
+      throw const PostgrestException(
+          message: "Invoice emails aren't set up yet: Vault has no kuzu_project_url secret.", code: 'KH503');
+    }
+    emailedInvoices.add(periodId);
+    return true;
   }
 
   @override

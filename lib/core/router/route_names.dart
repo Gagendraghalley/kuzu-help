@@ -74,4 +74,5 @@ class Routes {
   static const users = '/admin/users';
   static const reports = '/admin/reports';
   static const adminVenues = '/admin/venues';
+  static const adminBilling = '/admin/billing'; // every ground's subscription and billing
 }

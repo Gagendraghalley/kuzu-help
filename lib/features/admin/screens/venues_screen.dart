@@ -5,10 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/error_messages.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/empty_state.dart';
-import '../../grounds/providers/subscription_providers.dart';
 import '../../grounds/providers/venue_providers.dart';
 import '../../grounds/widgets/status_pill.dart';
 import '../../grounds/widgets/venue_card.dart';
@@ -21,24 +19,6 @@ import '../widgets/billing_settings_sheet.dart';
 class AdminVenuesScreen extends ConsumerWidget {
   const AdminVenuesScreen({super.key});
 
-  Future<void> _openBillingSettings(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final settings = await ref.read(subscriptionSettingsProvider.future);
-      if (!context.mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: (_) => BillingSettingsSheet(settings: settings),
-      );
-    } catch (e) {
-      ref.invalidate(subscriptionSettingsProvider); // try again next time
-      messenger.showSnackBar(SnackBar(content: Text(ErrorMessages.from(e))));
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final venues = ref.watch(allVenuesProvider);
@@ -50,7 +30,7 @@ class AdminVenuesScreen extends ConsumerWidget {
           IconButton(
             tooltip: AppStrings.billingSettings,
             icon: const Icon(Icons.receipt_long_outlined),
-            onPressed: () => _openBillingSettings(context, ref),
+            onPressed: () => openBillingSettings(context, ref),
           ),
         ],
       ),

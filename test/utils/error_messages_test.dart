@@ -46,6 +46,8 @@ void main() {
     expect(ErrorMessages.from(ahead), AppStrings.oneMonthAtATime);
     const paid = PostgrestException(message: 'Paid until ...: months paid for stay', code: 'KH410');
     expect(ErrorMessages.from(paid), AppStrings.paidMonthsStay);
+    const notSetUp = PostgrestException(message: "Invoice emails aren't set up yet: pg_net is off.", code: 'KH503');
+    expect(ErrorMessages.from(notSetUp), "Invoice emails aren't set up yet: pg_net is off.");
   });
 
   test('the delete-account Edge Function is not deployed', () {

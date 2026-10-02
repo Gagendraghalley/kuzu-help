@@ -85,6 +85,8 @@ class SubscriptionPeriod {
   final String? paymentMethod; // a BillingMethod value; paid ones
   final String? paymentReference; // the mBoB / mPay journal number
   final String? note;
+  final String? invoiceNumber; // paid ones: KH-2026-00001
+  final DateTime? invoiceSentAt; // when it was last emailed to the manager; null: not yet
   final DateTime createdAt;
 
   const SubscriptionPeriod({
@@ -97,6 +99,8 @@ class SubscriptionPeriod {
     this.paymentMethod,
     this.paymentReference,
     this.note,
+    this.invoiceNumber,
+    this.invoiceSentAt,
     required this.createdAt,
   });
 
@@ -110,11 +114,25 @@ class SubscriptionPeriod {
         paymentMethod: json['payment_method'] as String?,
         paymentReference: json['payment_reference'] as String?,
         note: json['note'] as String?,
+        invoiceNumber: json['invoice_number'] as String?,
+        invoiceSentAt: switch (json['invoice_sent_at']) {
+          final String sent => DateTime.parse(sent),
+          _ => null,
+        },
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 
   DateTime get firstDay => BhutanTime.dayOf(startsAt);
   DateTime get lastDay => VenueSubscription.lastDayBefore(endsAt);
+
+  /// The Ngultrum [periods] took in, recorded in the Bhutan month of [now].
+  static int receivedInMonth(Iterable<SubscriptionPeriod> periods, {DateTime? now}) {
+    final today = BhutanTime.today(now: now);
+    return periods.fold(0, (total, p) {
+      final day = BhutanTime.dayOf(p.createdAt);
+      return day.year == today.year && day.month == today.month ? total + (p.amountNu ?? 0) : total;
+    });
+  }
 }
 
 /// What admins set once for every ground (subscription_settings).

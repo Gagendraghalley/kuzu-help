@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/admin/screens/billing_screen.dart';
 import '../../features/admin/screens/pending_workers_screen.dart';
 import '../../features/admin/screens/reports_screen.dart';
 import '../../features/admin/screens/users_screen.dart';
@@ -148,6 +149,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.users, builder: (_, __) => const UsersScreen()),
       GoRoute(path: Routes.reports, builder: (_, __) => const ReportsScreen()),
       GoRoute(path: Routes.adminVenues, builder: (_, __) => const AdminVenuesScreen()),
+      GoRoute(path: Routes.adminBilling, builder: (_, __) => const BillingScreen()),
     ],
   );
 });

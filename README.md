@@ -171,19 +171,29 @@ changed.
      a time. Admins can also **Give free time** of any length (a week to a year at once,
      as often as they like), **Shorten free time** the ground hasn't had yet (e.g. 6 months
      given that should have been 1: pick the new last day, from today; months paid for
-     always stay), and change each ground's monthly fee. **Billing settings** (the
-     receipt icon on Sports grounds) holds the fee new grounds get and how managers pay
+     always stay), and change each ground's monthly fee. **Billing** (Settings → Billing)
+     shows every ground in one place, the soonest to end first: how many are hidden or
+     due in 7 days, what came in this month, filters (to pay, free, paid), a *Record a
+     payment* button on each ground that's due, and *History*, every payment and free time
+     of every ground. Tapping a ground opens its Subscription page. **Billing settings**
+     (the gear on Billing, or the receipt icon on Sports grounds) holds the fee new grounds get and how managers pay
      Kuzu Help (e.g. an mBoB account), shown to every manager. Only admins can change any
      of it: the database refuses everyone else. Managers see their subscription on their
      home (at the top, in orange, in its last 7 days; in red once it has ended) and on its
      page, with the fee, how to pay and the billing history. When a subscription ends, the
      ground disappears from players' lists, search and its page, nobody can book it, and
      its manager can't add bookings by phone or regular bookings until the next payment
-     is recorded; bookings already made stay. Notifications: the manager when the free
-     month starts, free time is given or shortened, or a payment is recorded (a receipt), 7, 3 and 1
-     days before the end, and when it ends; admins when one ends. **The reminders need
-     pg_cron**: Database → Extensions → turn on pg_cron, then run `updates.sql` again (it
-     schedules them every hour). Deploy `send-push` again for their push wording.
+     is recorded; bookings already made stay. Notifications (in the bell, and on the phone
+     once push is set up): the manager when the free month starts, free time is given or
+     shortened, or a payment is recorded (a receipt, with its invoice number), 7, 3 and 1
+     days before the end, and when it ends; admins when another admin records a payment
+     (not the one who recorded it), 7, 3 and 1 days before a ground's end (to collect the
+     payment), and when one ends. Each payment gets an invoice number (KH-2026-00001 on),
+     and its invoice is **emailed to the manager** once invoice emails are set up (below);
+     admins can email one again from the envelope on the payment in the ground's billing
+     history. **The reminders need pg_cron**: Database → Extensions → turn on pg_cron, then
+     run `updates.sql` again (it schedules them every hour). Deploy `send-push` again for
+     their push wording.
 
    **Ground managers' accounts** (Register a venue, and Change manager on a venue): deploy `supabase/functions/create-venue-manager/` the same way as `delete-account`
    below, named `create-venue-manager`. Only admins can call it. It makes the account
@@ -284,6 +294,38 @@ It needs a paid Apple Developer team (this project uses team `6E2JNTTC36`), and:
 4. Test on a real iPhone, run from Xcode or `flutter run` with the team selected under
    Runner → Signing & Capabilities. (Recent simulators on Apple silicon Macs can receive
    pushes too, but a real phone is the dependable test.)
+
+## Invoice emails (optional)
+
+When an admin records a ground's payment, the database asks the `send-invoice` Edge
+Function to email the invoice to the ground's manager (the email on their account), from
+**your own mailbox** (e.g. your Gmail) over SMTP. Managers see it from *Kuzu Help* at
+your address, and their replies come to you. Until this is set up, payments are recorded
+and everyone is notified as before; the invoice just isn't emailed (its number still shows
+in the billing history, and an admin can email it later from the envelope, which also
+says what's still missing).
+
+1. **Push's steps 3–4 first** (above): `send-invoice` uses the same `PUSH_SECRET` and the
+   same two Vault secrets, so if push is set up, there's nothing more to do there. (Only
+   these steps are needed for invoices, not Firebase.)
+2. **A Gmail App Password**: Google Account → Security → turn on *2-Step Verification*,
+   then myaccount.google.com/apppasswords → name it *Kuzu Help* → copy the 16 letters.
+   This lets the function send as you without your real password; delete it there to
+   stop it. (Gmail sends up to about 500 emails a day. Another provider works too: give
+   its SMTP server and port 465 below.)
+3. **The send-invoice Edge Function**: Supabase → Edge Functions → Deploy a new function
+   → Via Editor, name it `send-invoice`, paste in `supabase/functions/send-invoice/index.ts`,
+   Deploy, and turn **off** *Enforce JWT verification* in its settings, as for send-push.
+   Edge Functions → Secrets, add:
+   - `SMTP_USER`: your Gmail address;
+   - `SMTP_PASS`: the App Password from step 2;
+   - optional `INVOICE_BCC`: your own email, for a copy of every invoice;
+   - optional `INVOICE_FROM`, `INVOICE_REPLY_TO`, `SMTP_HOST`, `SMTP_PORT`: see the top
+     of `send-invoice/index.ts` (Gmail needs none of them).
+4. Run the latest `supabase/updates.sql` (section 14 numbers the invoices and sends them).
+5. Record a payment, or tap the envelope on one: the manager gets the invoice, and the
+   payment in the billing history says *emailed* (pull down to refresh). If it doesn't,
+   look at Edge Functions → send-invoice → Logs (`535`: the App Password is wrong).
 
 ## Sign in with Google (optional; Android and iPhone)
 
@@ -496,7 +538,7 @@ own iPhone and check it, then on the version's page pick the build → *Add for 
 | `lib/features/admin` | Workers awaiting approval, Sports venues, Users, Reports, and the 'Admin check' card (approve, reject, deactivate) |
 | `lib/features/notifications` | The bell (unread count) and the Notifications screen |
 | `lib/shared` | Models and reusable widgets |
-| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the Edge Functions: delete-account (Settings → Delete account), send-push (push notifications) and create-venue-manager (ground managers' accounts) |
+| `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the Edge Functions: delete-account (Settings → Delete account), send-push (push notifications), send-invoice (payment invoices by email) and create-venue-manager (ground managers' accounts) |
 | `scripts/` | `release.sh`: build and upload to both stores in one command; `play_upload.mjs`: its Google Play upload |
 
 Each feature has `screens/` (display only), `providers/` (Riverpod state) and

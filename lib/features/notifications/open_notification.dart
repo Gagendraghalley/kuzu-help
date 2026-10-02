@@ -76,7 +76,9 @@ void openNotification(BuildContext context, WidgetRef ref, AppNotification n) {
           NotificationTypes.subscriptionShortened ||
           NotificationTypes.subscriptionEnding ||
           NotificationTypes.subscriptionEnded ||
-          NotificationTypes.subscriptionLapsed
+          NotificationTypes.subscriptionLapsed ||
+          NotificationTypes.subscriptionPaid ||
+          NotificationTypes.subscriptionDue
         when venueId != null:
       ref.invalidate(venueDetailsProvider(venueId));
       ref.invalidate(subscriptionPeriodsProvider(venueId));

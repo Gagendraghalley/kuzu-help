@@ -25,6 +25,7 @@ import '../providers/subscription_providers.dart';
 import '../providers/venue_providers.dart';
 import '../widgets/fact_row.dart';
 import '../widgets/status_pill.dart';
+import '../widgets/subscription_period_tile.dart';
 
 /// A ground's subscription: its manager's (to read) and admins'
 /// Purpose: How long players can find and book the ground, its monthly fee,
@@ -184,7 +185,7 @@ class _AdminCard extends StatelessWidget {
             FilledButton.icon(
               icon: const Icon(Icons.payments_outlined),
               label: const Text(AppStrings.recordPayment),
-              onPressed: canPay ? () => _open(context, _PaymentSheet(venueId: venue.id, subscription: s)) : null,
+              onPressed: canPay ? () => showRecordPaymentSheet(context, venue.id, s) : null,
             ),
             if (!canPay) ...[
               const SizedBox(height: 8),
@@ -256,30 +257,16 @@ class _History extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final muted = TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant);
+    final isAdmin = ref.watch(isAdminProvider);
     return switch (ref.watch(subscriptionPeriodsProvider(venueId))) {
       AsyncData(value: final periods) when periods.isNotEmpty => Card(
           child: Column(
             children: [
               for (final (i, p) in periods.indexed) ...[
                 if (i > 0) const Divider(indent: 70, endIndent: 16),
-                ListTile(
-                  leading: IconTile(
-                    icon: p.kind == SubscriptionKind.paid ? Icons.payments_outlined : Icons.card_giftcard_outlined,
-                    color: p.kind == SubscriptionKind.paid ? AppColors.verified : AppColors.primaryDeep,
-                  ),
-                  title: Text(
-                    [AppStrings.subscriptionKindLabel(p.kind), if (p.amountNu case final amount?) PriceUtils.nu(amount)]
-                        .join(' · '),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text([
-                    AppStrings.periodDates(p.firstDay, p.lastDay),
-                    [
-                      if (p.paymentMethod case final method?) AppStrings.billingMethodLabel(method),
-                      if (p.paymentReference case final reference?) AppStrings.journalNo(reference),
-                      if (p.note case final note?) note,
-                    ].join(' · '),
-                  ].where((line) => line.isNotEmpty).join('\n')),
+                SubscriptionPeriodTile(
+                  period: p,
+                  trailing: isAdmin && p.kind == SubscriptionKind.paid ? _EmailInvoiceButton(period: p) : null,
                 ),
               ],
             ],
@@ -303,13 +290,68 @@ class _History extends ConsumerWidget {
   }
 }
 
+/// Admins: email a payment's invoice to the ground's manager (again). It's
+/// sent in the background; the history says 'emailed' once it has gone.
+class _EmailInvoiceButton extends ConsumerStatefulWidget {
+  final SubscriptionPeriod period;
+
+  const _EmailInvoiceButton({required this.period});
+
+  @override
+  ConsumerState<_EmailInvoiceButton> createState() => _EmailInvoiceButtonState();
+}
+
+class _EmailInvoiceButtonState extends ConsumerState<_EmailInvoiceButton> {
+  bool _sending = false;
+
+  Future<void> _send() async {
+    setState(() => _sending = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final asked = await ref.read(subscriptionRepositoryProvider).emailInvoice(widget.period.id);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(asked ? AppStrings.invoiceEmailing : AppStrings.invoiceEmailsOff)));
+    } catch (e) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(ErrorMessages.from(e))));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: AppStrings.emailInvoice,
+      icon: _sending
+          ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.forward_to_inbox_outlined, color: AppColors.primaryDeep),
+      onPressed: _sending ? null : _send,
+    );
+  }
+}
+
 /// After an admin changes a subscription: everything that shows it.
 void _refreshSubscription(WidgetRef ref, String venueId) {
   ref.invalidate(venueDetailsProvider(venueId));
   ref.invalidate(subscriptionPeriodsProvider(venueId));
+  ref.invalidate(allSubscriptionPeriodsProvider);
   ref.invalidate(allVenuesProvider);
   ref.invalidate(myVenuesProvider);
 }
+
+/// Admins: record the ground's next month, from its Subscription page or
+/// from Billing.
+Future<void> showRecordPaymentSheet(BuildContext context, String venueId, VenueSubscription subscription) =>
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _PaymentSheet(venueId: venueId, subscription: subscription),
+    );
 
 /// A whole number of Ngultrum, 1 to 1,000,000, as the database takes it.
 int? _amountOf(String text) => switch (int.tryParse(text.trim())) {

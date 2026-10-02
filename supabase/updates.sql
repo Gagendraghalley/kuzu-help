@@ -1,48 +1,3 @@
--- =====================================================================
--- Kuzu Help - database updates after schema.sql
--- Run in Supabase > SQL Editor, after schema.sql: open this file, copy
--- ALL of it, paste it into a new query and press Run.
--- Safe to run again: it replaces what it made last time. Run the latest
--- version whenever the app says 'The database needs an update'.
--- =====================================================================
---   1. Admins approve or reject workers from the app.
---   2. Admins deactivate (blacklist) users.
---   3. New workers can go back to customer; sign-up and log-in check emails.
---   4. What customers see in worker_directory, with all of the above.
---   5. Notifications: each user's own list, under the bell.
---   6. Admins read reports and mark them reviewed or closed in the app.
---   7. Only customers who got in touch with a worker can review them.
---   8. Workers reply to reviews.
---   9. Photos of workers' past work.
---  10. Customers save workers.
---  11. Job requests: customers send them, workers accept or decline.
---  12. Push notifications: each notification also goes to the user's phones.
---  13. Sports grounds: admins register venues with their managers; players book grounds.
---      One account can hold more than one role (customer and player), one per service.
---      Anyone can look at venues and their free times without logging in.
---      Each ground's timings are time slots (several a day); customers book a whole slot,
---      up to a week ahead. Managers add bookings taken by phone, and regular bookings
---      (the same time every week), and keep a record of who books.
---      Each venue can have its place on the map, for directions and how far away it is.
---      New accounts made with 'Continue with Google' take the role picked on Welcome (13d).
---      Admins change users' roles: customer, player and worker (13d).
---      A customer has one booking of a ground at a time, until it's over (book_ground, 13d).
---  14. Ground subscriptions: a free month for each new ground, then monthly payments that
---      admins record, one month at a time; a ground whose subscription has ended is hidden.
---      Admins give free time, and take back free time a ground hasn't had yet.
--- The last line makes the app see the changes straight away.
--- =====================================================================
-
-
--- ---------------------------------------------------------------------
--- 1. Approving workers
--- ---------------------------------------------------------------------
--- schema.sql lets no one change worker_profiles.verification_status through
--- the app, so a worker can never approve themself. This function is the one
--- way in, and it refuses anyone who isn't an admin.
---   approved: the worker appears to customers (worker_directory)
---   rejected: [note] is shown to the worker on their pending screen (B4)
---   pending:  back to waiting
 create or replace function public.set_worker_verification(worker_id uuid, new_status text, note text default null)
 returns void
 language plpgsql
@@ -3022,9 +2977,12 @@ create policy "storage: venue photos upload by managers and admins"
 -- and answers them.
 --
 -- The manager is told when a period is added (their free month, free time,
--- a payment) or free time is taken back, 7, 3 and 1 days before it ends, and when it has ended; admins
--- when it has ended (send_subscription_notices, every hour once pg_cron is
--- on: end of this section).
+-- a payment) or free time is taken back, 7, 3 and 1 days before it ends, and
+-- when it has ended; admins when a payment is recorded, 7, 3 and 1 days
+-- before a ground's end, and when it has ended (send_subscription_notices,
+-- every hour once pg_cron is on: end of this section). Each notification
+-- also reaches their phones once push is set up (section 12). Each payment
+-- has an invoice, emailed to the manager (send-invoice, README).
 
 -- A ground's billing history: its free month, free time, and each month paid.
 create table if not exists public.venue_subscription_periods (
@@ -3045,6 +3003,15 @@ create table if not exists public.venue_subscription_periods (
 );
 create index if not exists venue_subscription_periods_venue_idx
   on public.venue_subscription_periods (venue_id, ends_at desc);
+
+-- Each month paid has an invoice, emailed to the ground's manager (the
+-- send-invoice Edge Function, below): its number, KH-<year>-<00001 on>, and
+-- when it was last emailed (null: not yet, or emailing isn't set up).
+alter table public.venue_subscription_periods
+  add column if not exists invoice_number text unique,
+  add column if not exists invoice_sent_at timestamptz;
+create sequence if not exists public.subscription_invoice_seq;
+revoke all on sequence public.subscription_invoice_seq from public, anon, authenticated;
 
 -- The reminders each ground's manager has had, so each goes once for each
 -- end: after a payment or free time there's a new end, and they start again.
@@ -3172,7 +3139,8 @@ begin
       'starts_at', new.starts_at,
       'ends_at', new.ends_at,
       'amount_nu', new.amount_nu,
-      'fee_nu', v.subscription_fee_nu),
+      'fee_nu', v.subscription_fee_nu,
+      'invoice_number', new.invoice_number),
     new.created_by);
   return new;
 end;
@@ -3182,6 +3150,124 @@ drop trigger if exists venue_subscription_periods_added on public.venue_subscrip
 create trigger venue_subscription_periods_added
   after insert on public.venue_subscription_periods
   for each row execute function public.handle_subscription_period_added();
+
+-- A month paid gets the next invoice number as it's saved.
+create or replace function public.number_subscription_invoice()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.kind = 'paid' and new.invoice_number is null then
+    new.invoice_number := 'KH-' || to_char(now() at time zone 'Asia/Thimphu', 'YYYY') || '-'
+      || lpad(nextval('public.subscription_invoice_seq')::text, 5, '0');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists venue_subscription_periods_invoice_number on public.venue_subscription_periods;
+create trigger venue_subscription_periods_invoice_number
+  before insert on public.venue_subscription_periods
+  for each row execute function public.number_subscription_invoice();
+
+-- Payments recorded before invoices get their numbers now, oldest first
+-- (they aren't emailed: an admin can send one from the ground's page).
+do $$
+declare
+  p record;
+begin
+  for p in
+    select id, created_at from public.venue_subscription_periods
+    where kind = 'paid' and invoice_number is null
+    order by created_at
+  loop
+    update public.venue_subscription_periods
+    set invoice_number = 'KH-' || to_char(p.created_at at time zone 'Asia/Thimphu', 'YYYY') || '-'
+      || lpad(nextval('public.subscription_invoice_seq')::text, 5, '0')
+    where id = p.id;
+  end loop;
+end;
+$$;
+
+-- Asks the send-invoice Edge Function to email [period]'s invoice to its
+-- ground's manager, as send_push does for pushes (section 12): with the
+-- project's address and the shared secret from Vault, once the payment is
+-- saved. Without them (README, 'Invoice emails') nothing is sent, and any
+-- problem here is only logged, so an email can never stop a payment being
+-- recorded. Returns null once it has asked, else what's missing (admins see
+-- it in the app: email_subscription_invoice). It returned a boolean at first.
+drop function if exists public.request_invoice_email(uuid);
+create or replace function public.request_invoice_email(period uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  project_url text;
+  push_secret text;
+begin
+  if not exists (select 1 from pg_catalog.pg_extension where extname = 'pg_net') then
+    return 'pg_net is off. Supabase: Database > Extensions > turn on pg_net.';
+  end if;
+  if pg_catalog.to_regclass('vault.decrypted_secrets') is null then
+    return 'Vault is off. Supabase: Database > Extensions > turn on supabase_vault.';
+  end if;
+  select decrypted_secret into project_url from vault.decrypted_secrets where name = 'kuzu_project_url';
+  select decrypted_secret into push_secret from vault.decrypted_secrets where name = 'kuzu_push_secret';
+  if project_url is null or push_secret is null then
+    return 'Vault has no ' || concat_ws(' or ',
+        case when project_url is null then 'kuzu_project_url' end,
+        case when push_secret is null then 'kuzu_push_secret' end)
+      || ' secret. Add it in the SQL Editor (README: Push notifications, step 4).';
+  end if;
+  perform net.http_post(
+    url := rtrim(project_url, '/') || '/functions/v1/send-invoice',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', push_secret),
+    body := jsonb_build_object('period_id', period)
+  );
+  return null;
+exception when others then
+  raise warning 'Invoice email not sent: %', sqlerrm;
+  return sqlerrm;
+end;
+$$;
+
+-- A payment: the other admins are told (the one who recorded it knows),
+-- and its invoice goes to the manager by email. The manager's own
+-- notification is handle_subscription_period_added's.
+create or replace function public.handle_subscription_paid()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v public.venues;
+begin
+  select * into v from public.venues where id = new.venue_id;
+  perform public.add_admin_notification('subscription_paid',
+    jsonb_build_object(
+      'venue_id', v.id,
+      'venue_name', v.name,
+      'kind', new.kind,
+      'ends_at', new.ends_at,
+      'amount_nu', new.amount_nu,
+      'payment_method', new.payment_method,
+      'invoice_number', new.invoice_number),
+    new.created_by);
+  perform public.request_invoice_email(new.id);
+  return new;
+end;
+$$;
+
+drop trigger if exists venue_subscription_periods_paid on public.venue_subscription_periods;
+create trigger venue_subscription_periods_paid
+  after insert on public.venue_subscription_periods
+  for each row when (new.kind = 'paid')
+  execute function public.handle_subscription_paid();
 
 -- A new ground's free month (add_venue, and grounds from before
 -- subscriptions, below). Its fee is the one for new grounds, unless it has one.
@@ -3373,9 +3459,36 @@ begin
 end;
 $$;
 
+-- Admins: email a payment's invoice to its ground's manager (again), e.g.
+-- one they lost, or one recorded before emailing was set up. Postgres error
+-- KH503 when emailing isn't set up, saying what's missing (README, 'Invoice
+-- emails'). Returns true once it has asked.
+create or replace function public.email_subscription_invoice(period uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  problem text;
+begin
+  if not public.is_admin() or not public.is_active_profile((select auth.uid())) then
+    raise exception 'Only admins email invoices' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.venue_subscription_periods p where p.id = period and p.kind = 'paid') then
+    raise exception 'No payment with this ID' using errcode = 'P0002';
+  end if;
+  problem := public.request_invoice_email(period);
+  if problem is not null then
+    raise exception 'Invoice emails aren''t set up yet: %', problem using errcode = 'KH503';
+  end if;
+  return true;
+end;
+$$;
+
 -- Reminders: each ground's manager 7, 3 and 1 days before its subscription
--- ends, and once it has ended (then admins too, to follow up). Each once for
--- each end. Grounds that ended more than 7 days ago are left alone (e.g. the
+-- ends, to pay, and admins too, to collect it ('subscription_due'); once it
+-- has ended, the manager and admins again. Each once for each end. Grounds that ended more than 7 days ago are left alone (e.g. the
 -- first time this runs). Returns how many were sent. Every hour once pg_cron
 -- is on (below).
 create or replace function public.send_subscription_notices()
@@ -3416,6 +3529,7 @@ begin
       perform public.add_admin_notification('subscription_lapsed', details);
     else
       perform public.add_notification(v.manager_id, 'subscription_ending', details);
+      perform public.add_admin_notification('subscription_due', details);
     end if;
     sent := sent + 1;
   end loop;
@@ -3427,6 +3541,9 @@ revoke execute on function
   public.subscription_period_end(timestamptz, int, int),
   public.add_subscription_period(uuid, text, int, int, int, text, text, text),
   public.handle_subscription_period_added(),
+  public.number_subscription_invoice(),
+  public.request_invoice_email(uuid),
+  public.handle_subscription_paid(),
   public.start_free_trial(uuid),
   public.send_subscription_notices()
   from public, anon, authenticated;
@@ -3435,14 +3552,16 @@ revoke execute on function
   public.shorten_free_time(uuid, date, text),
   public.record_subscription_payment(uuid, int, text, text, text),
   public.set_subscription_fee(uuid, int),
-  public.set_subscription_settings(int, text)
+  public.set_subscription_settings(int, text),
+  public.email_subscription_invoice(uuid)
   from public, anon;
 grant execute on function
   public.extend_free_period(uuid, int, int, text),
   public.shorten_free_time(uuid, date, text),
   public.record_subscription_payment(uuid, int, text, text, text),
   public.set_subscription_fee(uuid, int),
-  public.set_subscription_settings(int, text)
+  public.set_subscription_settings(int, text),
+  public.email_subscription_invoice(uuid)
   to authenticated;
 
 -- Grounds registered before subscriptions start their free month now, and

@@ -50,6 +50,8 @@ class ErrorMessages {
     if (error is PostgrestException && error.code == 'KH402') return AppStrings.subscriptionEndedError;
     if (error is PostgrestException && error.code == 'KH409') return AppStrings.oneMonthAtATime;
     if (error is PostgrestException && error.code == 'KH410') return AppStrings.paidMonthsStay;
+    // Invoice emails aren't set up: the database says what's missing (admins only).
+    if (error is PostgrestException && error.code == 'KH503') return error.message;
     // The delete-account Edge Function isn't deployed (see the README).
     if (error is FunctionException && error.status == 404) {
       return AppStrings.accountDeletionNotSetUp;

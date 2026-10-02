@@ -116,6 +116,7 @@ void main() {
       ]) {
         expect(find.text(adminOnly), findsNothing, reason: adminOnly);
       }
+      expect(find.byTooltip(AppStrings.emailInvoice), findsNothing);
     });
 
     testWidgets('in its last days, the subscription moves to the top and says what to pay', (tester) async {
@@ -321,6 +322,39 @@ void main() {
       );
     });
 
+    testWidgets("each payment has an invoice; an admin emails it to the manager again", (tester) async {
+      final s = subscriptionFor(daysLeft: 21, kind: SubscriptionKind.paid);
+      final paid = SubscriptionPeriod(
+        id: 'period-paid',
+        venueId: 'venue-1',
+        kind: SubscriptionKind.paid,
+        startsAt: s.endsAt.subtract(const Duration(days: 30)),
+        endsAt: s.endsAt,
+        amountNu: 1500,
+        paymentMethod: BillingMethod.mbob,
+        invoiceNumber: 'KH-2026-00001',
+        invoiceSentAt: DateTime.now(),
+        createdAt: DateTime.now().subtract(const Duration(days: 9)),
+      );
+      final fakes =
+          await openGrounds(tester, role: UserRole.admin, manager: 'tashi', subscription: s, periods: [paid]);
+      await openChangliSubscription(tester);
+      await scrollAndTap(tester, find.byTooltip(AppStrings.emailInvoice));
+      expect(find.textContaining(AppStrings.invoiceLabel('KH-2026-00001', emailed: true)), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(fakes.subscriptions.emailedInvoices, ['period-paid']);
+      expect(find.text(AppStrings.invoiceEmailing), findsOneWidget);
+
+      // Until emailing is set up, the admin is told what's missing.
+      fakes.subscriptions.invoiceEmailsOn = false;
+      ScaffoldMessenger.of(tester.element(find.byTooltip(AppStrings.emailInvoice))).hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(AppStrings.emailInvoice));
+      await tester.pumpAndSettle();
+      expect(find.text("Invoice emails aren't set up yet: Vault has no kuzu_project_url secret."), findsOneWidget);
+      expect(fakes.subscriptions.emailedInvoices, ['period-paid']);
+    });
+
     testWidgets("an admin changes a ground's monthly fee", (tester) async {
       final fakes = await openGrounds(tester, role: UserRole.admin, manager: 'tashi');
       await openChangliSubscription(tester);
@@ -347,6 +381,79 @@ void main() {
       final settings = fakes.subscriptions.settings;
       expect((settings.defaultFeeNu, settings.paymentInfo), (1800, 'mPay 17123456 (Kuzu Help)'));
       expect(find.text(AppStrings.billingSettingsSaved), findsOneWidget);
+    });
+  });
+
+  group('Billing (admins): every ground in one place', () {
+    testWidgets('the soonest to end first, with what is due; filters show who to chase', (tester) async {
+      await openGrounds(tester, role: UserRole.admin, manager: 'tashi', subscription: subscriptionFor(daysLeft: -2));
+      await openSettingsItem(tester, AppStrings.billing);
+
+      // Changli has ended, Paro is paid for 15 more days.
+      expect(tester.getTopLeft(find.text('Changli Futsal')).dy, lessThan(tester.getTopLeft(find.text('Paro Arena')).dy));
+      expect(find.text(AppStrings.subscriptionEnded), findsOneWidget);
+      final paro = subscriptionFor(daysLeft: 15, kind: SubscriptionKind.paid);
+      expect(find.text(AppStrings.subscriptionUntil(SubscriptionKind.paid, paro.lastDay)), findsOneWidget);
+      expect(find.text(AppStrings.recordPayment), findsOneWidget); // only Changli's is due
+      expect(find.text(AppStrings.billingHidden), findsOneWidget);
+      for (final (label, count) in [
+        (AppStrings.billingAll, 2),
+        (AppStrings.billingToPay, 1),
+        (AppStrings.billingFree, 0),
+        (AppStrings.subscriptionKindLabel(SubscriptionKind.paid), 1),
+      ]) {
+        expect(find.text(AppStrings.withCount(label, count)), findsOneWidget, reason: label);
+      }
+
+      await tapAndSettle(tester, AppStrings.withCount(AppStrings.subscriptionKindLabel(SubscriptionKind.paid), 1));
+      expect(find.text('Changli Futsal'), findsNothing);
+      expect(find.text('Paro Arena'), findsOneWidget);
+      await tapAndSettle(tester, AppStrings.withCount(AppStrings.billingFree, 0));
+      expect(find.text(AppStrings.noGroundsHere), findsOneWidget);
+      await tapAndSettle(tester, AppStrings.withCount(AppStrings.billingToPay, 1));
+      expect(find.text('Changli Futsal'), findsOneWidget);
+      expect(find.text('Paro Arena'), findsNothing);
+
+      // A ground opens its Subscription page, for free time and its fee.
+      await tapAndSettle(tester, 'Changli Futsal');
+      expect(find.widgetWithText(AppBar, AppStrings.subscription), findsOneWidget);
+      expect(find.text(AppStrings.giveFreeTime), findsOneWidget);
+    });
+
+    testWidgets('an admin records a payment straight from the list, and finds it in History', (tester) async {
+      final s = subscriptionFor(daysLeft: -2);
+      final fakes = await openGrounds(tester,
+          role: UserRole.admin, manager: 'tashi', subscription: s, periods: [periodOf(s)]);
+      await openSettingsItem(tester, AppStrings.billing);
+
+      await tapAndSettle(tester, AppStrings.recordPayment);
+      expect(find.text('1500'), findsOneWidget); // the ground's fee, to start with
+      await tapButton(tester, AppStrings.savePayment);
+
+      final paid = fakes.subscriptions.periods.first;
+      expect((paid.venueId, paid.kind, paid.amountNu), ('venue-1', SubscriptionKind.paid, 1500));
+      expect(find.text(AppStrings.paymentRecorded), findsOneWidget);
+      expect(find.text(AppStrings.recordPayment), findsNothing); // paid a month ahead now
+      expect(find.text(PriceUtils.nu(1500)), findsOneWidget); // received this month
+
+      await tapAndSettle(tester, AppStrings.billingRecords);
+      // Latest first: the payment, then Changli's free trial.
+      final payment = find.textContaining('${AppStrings.subscriptionKindLabel(SubscriptionKind.paid)} · ${PriceUtils.nu(1500)}');
+      final trial = find.textContaining(AppStrings.subscriptionKindLabel(SubscriptionKind.trial));
+      expect(find.text('Changli Futsal'), findsNWidgets(2));
+      expect(tester.getTopLeft(payment).dy, lessThan(tester.getTopLeft(trial).dy));
+
+      await tester.tap(payment);
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, AppStrings.subscription), findsOneWidget);
+    });
+
+    testWidgets('Billing settings are here too', (tester) async {
+      await openGrounds(tester, role: UserRole.admin, manager: 'tashi');
+      await openSettingsItem(tester, AppStrings.billing);
+      await tester.tap(find.byTooltip(AppStrings.billingSettings));
+      await tester.pumpAndSettle();
+      expect(find.text(AppStrings.defaultFee), findsOneWidget);
     });
   });
 
@@ -384,6 +491,16 @@ void main() {
       final paid = {'venue_name': 'Changli Futsal', 'kind': 'paid', 'ends_at': ends, 'amount_nu': 1500};
       expect(title(NotificationTypes.subscriptionUpdated, paid), 'Payment received for Changli Futsal');
       expect(body(NotificationTypes.subscriptionUpdated, paid), 'Nu. 1,500 · Paid until Mon 2 Nov.');
+      expect(body(NotificationTypes.subscriptionUpdated, {...paid, 'invoice_number': 'KH-2026-00001'}),
+          'Nu. 1,500 · Paid until Mon 2 Nov. Invoice KH-2026-00001.');
+      // Admins: another admin recorded a payment; a ground's payment is coming up.
+      final recorded = {...paid, 'payment_method': BillingMethod.mbob, 'invoice_number': 'KH-2026-00001'};
+      expect(title(NotificationTypes.subscriptionPaid, recorded), 'Payment recorded for Changli Futsal');
+      expect(body(NotificationTypes.subscriptionPaid, recorded), 'Nu. 1,500 · mBoB transfer · Paid until Mon 2 Nov.');
+      expect(title(NotificationTypes.subscriptionDue, trial), 'Payment due soon: Changli Futsal');
+      expect(body(NotificationTypes.subscriptionDue, trial),
+          "Last day: Mon 2 Nov. Record the next month's payment (Nu. 1,500) once they pay.");
+      expect(body(NotificationTypes.subscriptionDue, {}), "Record the next month's payment once they pay.");
       expect(title(NotificationTypes.subscriptionUpdated, {...trial, 'kind': 'free'}), 'More free time for Changli Futsal');
       final shortened = {...trial, 'kind': 'free', 'note': 'Agreed on one month'};
       expect(title(NotificationTypes.subscriptionShortened, shortened), 'Less free time for Changli Futsal');

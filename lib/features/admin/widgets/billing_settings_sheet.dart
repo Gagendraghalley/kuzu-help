@@ -13,9 +13,29 @@ import '../../../shared/widgets/sheet_title.dart';
 import '../../grounds/data/subscription_repository.dart';
 import '../../grounds/providers/subscription_providers.dart';
 
-/// Admins (Sports grounds -> Billing settings): the monthly fee new grounds
-/// get after their free month, and how managers pay Kuzu Help, shown on
-/// every ground's Subscription page (subscription_settings).
+/// Admins (Billing, or Sports grounds -> Billing settings): opens
+/// [BillingSettingsSheet] once the settings are in, or says what went wrong.
+Future<void> openBillingSettings(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final settings = await ref.read(subscriptionSettingsProvider.future);
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => BillingSettingsSheet(settings: settings),
+    );
+  } catch (e) {
+    ref.invalidate(subscriptionSettingsProvider); // try again next time
+    messenger.showSnackBar(SnackBar(content: Text(ErrorMessages.from(e))));
+  }
+}
+
+/// Admins: the monthly fee new grounds get after their free month, and how
+/// managers pay Kuzu Help, shown on every ground's Subscription page
+/// (subscription_settings).
 class BillingSettingsSheet extends ConsumerStatefulWidget {
   final SubscriptionSettings settings;
 

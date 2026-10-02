@@ -177,6 +177,8 @@ class NotificationTypes {
   static const subscriptionEnding = 'subscription_ending';   // the manager: 7, 3 and 1 days before it ends
   static const subscriptionEnded = 'subscription_ended';     // the manager: their ground is hidden
   static const subscriptionLapsed = 'subscription_lapsed';   // admins: a ground's subscription ended
+  static const subscriptionPaid = 'subscription_paid';       // admins: another admin recorded a payment
+  static const subscriptionDue = 'subscription_due';         // admins: 7, 3 and 1 days before a ground's end
 }
 
 /// C3: which contact button a customer tapped (record_contact in updates.sql).

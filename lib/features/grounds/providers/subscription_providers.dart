@@ -11,6 +11,11 @@ import '../data/subscription_repository.dart';
 final subscriptionPeriodsProvider = FutureProvider.autoDispose.family<List<SubscriptionPeriod>, String>(
     (ref, venueId) => ref.watch(subscriptionRepositoryProvider).getPeriods(venueId));
 
+/// Admins (Billing): every ground's billing history, latest recorded first.
+/// Invalidate with subscriptionPeriodsProvider.
+final allSubscriptionPeriodsProvider = FutureProvider.autoDispose<List<SubscriptionPeriod>>(
+    (ref) => ref.watch(subscriptionRepositoryProvider).getAllPeriods());
+
 /// How managers pay, and the fee new grounds get. Invalidate after saving them.
 final subscriptionSettingsProvider =
     FutureProvider.autoDispose<SubscriptionSettings>((ref) => ref.watch(subscriptionRepositoryProvider).getSettings());

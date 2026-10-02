@@ -118,6 +118,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label: AppStrings.sportsVenues,
                         onTap: () => context.push(Routes.adminVenues),
                       ),
+                      const _Divider(),
+                      _Item(
+                        icon: Icons.receipt_long_outlined,
+                        label: AppStrings.billing,
+                        onTap: () => context.push(Routes.adminBilling),
+                      ),
                     ],
                   ),
                 ),

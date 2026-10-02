@@ -21,8 +21,9 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 Deno.serve(async (req) => {
-  const secret = Deno.env.get("PUSH_SECRET");
-  if (!secret || req.headers.get("x-push-secret") !== secret) return json({ error: "unauthorized" }, 401);
+  // Trimmed: a secret pasted into the dashboard often ends with a line break.
+  const secret = Deno.env.get("PUSH_SECRET")?.trim();
+  if (!secret || req.headers.get("x-push-secret")?.trim() !== secret) return json({ error: "unauthorized" }, 401);
 
   const { notification_id: notificationId } = await req.json().catch(() => ({}));
   if (typeof notificationId !== "string") return json({ error: "notification_id is required" }, 400);
@@ -191,6 +192,13 @@ const payNextMonth = (fee?: number) =>
 const payToListAgain = (fee?: number) =>
   `Pay ${fee === undefined ? "" : `${nu(fee)} `}for the next month to list it again.`;
 
+/** How a month was paid, as AppStrings.billingMethodLabel. */
+const billingMethod = (method: string) =>
+  ({ mbob_transfer: "mBoB transfer", mpay_transfer: "mPay transfer", bank_transfer: "Bank transfer", cash: "Cash" } as Record<
+    string,
+    string
+  >)[method] ?? "Other";
+
 const reportReason = (code: string) =>
   ({
     did_not_show_up: "Did not show up",
@@ -249,6 +257,8 @@ export function pushTitle(type: string, data: Data): string {
     case "subscription_ending": return `${text(data, "venue_name", "Your ground")}'s ${subscriptionNoun(data.kind)} ends soon`;
     case "subscription_ended": return `${text(data, "venue_name", "Your ground")} is hidden from players`;
     case "subscription_lapsed": return `${text(data, "venue_name", "A ground")}'s subscription ended`;
+    case "subscription_paid": return `Payment recorded for ${text(data, "venue_name", "a ground")}`;
+    case "subscription_due": return `Payment due soon: ${text(data, "venue_name", "a ground")}`;
     default: return "Kuzu Help";
   }
 }
@@ -304,8 +314,12 @@ export function pushBody(type: string, data: Data): string {
     case "venue_review_updated": return "Tap to see your reviews.";
     case "subscription_updated": {
       const amount = num(data.amount_nu);
+      const invoice = str(data.invoice_number);
       return data.kind === "paid"
-        ? [amount === undefined ? undefined : nu(amount), `Paid${until}.`].filter((s) => s !== undefined).join(" · ")
+        ? [
+          [amount === undefined ? undefined : nu(amount), `Paid${until}.`].filter((s) => s !== undefined).join(" · "),
+          invoice === undefined ? undefined : `Invoice ${invoice}.`,
+        ].filter((s) => s !== undefined).join(" ")
         : data.kind === "free"
         ? `Listed for free${until}.`
         : `Listed for free${until}. After that, ${fee === undefined ? "a monthly subscription" : `${nu(fee)} a month`} keeps it listed for players.`;
@@ -320,6 +334,16 @@ export function pushBody(type: string, data: Data): string {
       return `Its ${subscriptionNoun(data.kind)} ended${lastDay === undefined ? "" : ` on ${lastDay}`}. ${payToListAgain(fee)}`;
     case "subscription_lapsed":
       return `${lastDay === undefined ? "" : `Last day: ${lastDay}. `}Players can't find it until you record a payment or give free time.`;
+    case "subscription_paid": {
+      const amount = num(data.amount_nu);
+      const method = str(data.payment_method);
+      return [amount === undefined ? undefined : nu(amount), method === undefined ? undefined : billingMethod(method), `Paid${until}.`]
+        .filter((s) => s !== undefined).join(" · ");
+    }
+    case "subscription_due":
+      return `${lastDay === undefined ? "" : `Last day: ${lastDay}. `}Record the next month's payment${
+        fee === undefined ? "" : ` (${nu(fee)})`
+      } once they pay.`;
     default: return "";
   }
 }
