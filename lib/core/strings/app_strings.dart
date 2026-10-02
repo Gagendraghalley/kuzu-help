@@ -55,6 +55,10 @@ class AppStrings {
   static const orUseEmail = 'or use your email';
   static const googleSignInFailed =
       "Couldn't sign in with Google. Please try again, or use your email.";
+  static const continueWithApple = 'Continue with Apple';
+  static const appleSignInFailed =
+      "Couldn't sign in with Apple. Please try again, or use your email.";
+  static const signInMethodOff = "This way of signing in isn't available yet. Please use your email.";
   static const alreadyRegisteredTitle = 'This email is already registered';
   static const alreadyRegisteredHelp = 'Log in with this email and your password instead. '
       "Forgot your password? Tap 'Forgot password?' on the log in screen.";
@@ -693,8 +697,14 @@ class AppStrings {
       ? '$venue is registered, and $manager runs it. They log in with $email and "$forgotPassword" the first time.'
       : '$venue is registered, and $manager runs it. They are told in the app.';
   static const venueSaved = 'The ground is saved';
-  static String venueStatusLabel({required bool active, required bool hasManager}) =>
-      !hasManager ? 'No manager yet' : active ? 'Taking bookings' : 'Paused';
+  static String venueStatusLabel({required bool active, required bool hasManager, bool subscriptionEnded = false}) =>
+      !hasManager
+          ? 'No manager yet'
+          : subscriptionEnded
+              ? 'Hidden'
+              : active
+                  ? 'Taking bookings'
+                  : 'Paused';
   static const takingBookings = 'Taking bookings';
   static const takingBookingsHint = 'Customers can find and book this ground.';
   static const pausedHint = "Paused: customers can't see this ground or book it.";
@@ -864,6 +874,98 @@ class AppStrings {
   static const managerSetupMissing =
       'Adding managers is not set up yet: deploy supabase/functions/create-venue-manager in Supabase.';
 
+  // Sports grounds: subscriptions (supabase/updates.sql, section 14). Only
+  // admins change them and record payments; the ground's manager reads them.
+  static const subscription = 'Subscription';
+  static String subscriptionKindLabel(String? kind) => switch (kind) {
+        SubscriptionKind.paid => 'Paid',
+        SubscriptionKind.free => 'Free time',
+        _ => 'Free trial',
+      };
+  /// What a period is called in a sentence.
+  static String _subscriptionNoun(Object? kind) => switch (kind) {
+        SubscriptionKind.paid => 'subscription',
+        SubscriptionKind.free => 'free time',
+        _ => 'free trial',
+      };
+  static String daysLeft(int days) => days <= 0 ? 'Last day today' : days == 1 ? '1 day left' : '$days days left';
+  static const subscriptionEnded = 'Subscription ended';
+  /// 'Free trial until 2 Nov'.
+  static String subscriptionUntil(String kind, DateTime lastDay) =>
+      '${subscriptionKindLabel(kind)} until ${dayMonth(lastDay)}';
+  /// 'Paid · 3 days left'.
+  static String subscriptionDaysLeft(String kind, int days) => '${subscriptionKindLabel(kind)} · ${daysLeft(days)}';
+  static String listedUntil(DateTime lastDay) => 'Players can find and book it until ${dayLabel(lastDay)}.';
+  static String endedOn(DateTime lastDay) =>
+      "It ended on ${dayLabel(lastDay)}. Players can't find or book it until the next month is paid.";
+  static const subscriptionEndedHint =
+      "Hidden: the subscription has ended. Players can't find or book this ground until the next month is paid.";
+  static const monthlyFee = 'Monthly fee';
+  static String feePerMonth(int fee) => '${PriceUtils.nu(fee)} a month';
+  static const feeNotSet = 'Not set yet';
+  static String payNextMonth(int? fee) =>
+      'Pay ${fee == null ? '' : '${PriceUtils.nu(fee)} '}for the next month to stay listed for players.';
+  static String payToListAgain(int? fee) =>
+      'Pay ${fee == null ? '' : '${PriceUtils.nu(fee)} '}for the next month to list it again.';
+  static const howToPaySubscription = 'How to pay';
+  static const howToPayNotSet = 'The Kuzu Help team will tell you how to pay.';
+  static const subscriptionManagerNote = 'Only the Kuzu Help team changes subscriptions and records payments, one '
+      'month at a time. You are told here and under the bell before yours ends.';
+  static const billingHistory = 'Billing history';
+  static const noBillingHistory = 'Nothing yet.';
+  /// '2 Oct – 1 Nov 2026'.
+  static String periodDates(DateTime firstDay, DateTime lastDay) =>
+      '${dayMonth(firstDay)} – ${dayMonth(lastDay)} ${lastDay.year}';
+  static String billingMethodLabel(String? method) => switch (method) {
+        BillingMethod.mbob => 'mBoB transfer',
+        BillingMethod.mpay => 'mPay transfer',
+        BillingMethod.bank => 'Bank transfer',
+        BillingMethod.cash => 'Cash',
+        _ => 'Other',
+      };
+  static String journalNo(String reference) => 'Journal no. $reference';
+  static const recordPayment = 'Record a payment';
+  static String nextPaymentFrom(DateTime lastDay, DateTime payableFrom) => 'Paid until ${dayLabel(lastDay)}. '
+      'Payments are one month at a time: the next one can be recorded from ${dayLabel(payableFrom)}.';
+  static const giveFreeTime = 'Give free time';
+  static const changeFee = 'Change monthly fee';
+  static const amountPaid = 'Amount paid';
+  static const enterAmount = 'Please enter the amount in Ngultrum';
+  static const paidBy = 'Paid by';
+  static const journalNumberOptional = 'Journal number (optional)';
+  static const billingNote = 'Note (optional)';
+  static const billingNoteHint = 'e.g. Paid at the Kuzu Help office';
+  static String coversMonth(DateTime firstDay, DateTime lastDay) =>
+      'Covers one month: ${dayLabel(firstDay)} – ${dayLabel(lastDay)}.';
+  static const savePayment = 'Record payment';
+  static const paymentRecorded = 'Payment recorded. The manager is told.';
+  static const oneMonthAtATime = 'This ground is paid for more than a week ahead. Payments are one month at a '
+      'time: record the next one in its last 7 days.';
+  static const freeTimeHint = 'The ground stays listed for free, after the time it has now. As long as you like.';
+  static const howLong = 'How long?';
+  /// '1 week', '2 weeks', '1 month', '3 months'.
+  static String freeLength(int months, int days) => months > 0
+      ? (months == 1 ? '1 month' : '$months months')
+      : days % 7 == 0
+          ? (days == 7 ? '1 week' : '${days ~/ 7} weeks')
+          : (days == 1 ? '1 day' : '$days days');
+  static String freeUntil(DateTime lastDay) => 'Free until ${dayLabel(lastDay)}.';
+  /// 'Give 2 months free'.
+  static String giveLengthFree(int months, int days) => 'Give ${freeLength(months, days)} free';
+  static const freeTimeGiven = 'Free time given. The manager is told.';
+  static const feeHint = "This ground's fee each month, after any free time. Its manager sees it with their "
+      'subscription and reminders.';
+  static const feeSaved = 'Monthly fee saved.';
+  static const billingSettings = 'Billing settings';
+  static const defaultFee = 'Monthly fee for new grounds (optional)';
+  static const defaultFeeHint = "New grounds get this fee for after their free month. Change one ground's fee on "
+      'its Subscription page.';
+  static const howManagersPay = 'How managers pay (optional)';
+  static const howManagersPayHint = 'e.g. mBoB 200123456 (Kuzu Help). Send the journal number to 17123456.';
+  static const billingSettingsSaved = 'Billing settings saved.';
+  static const subscriptionEndedError =
+      "This ground's subscription has ended. Bookings can be added again once the next month is paid.";
+
   // Bhutan time, for bookings
   /// '6 am', '12 pm'; 0 and 24 are '12 am' (midnight).
   static String hourLabel(int hour) {
@@ -981,8 +1083,24 @@ class AppStrings {
       NotificationTypes.venueReviewNew => 'A customer rated your ground ${starsLabel(rating)}',
       NotificationTypes.venueReviewUpdated =>
         'A customer changed their rating of your ground to ${starsLabel(rating)}',
+      NotificationTypes.subscriptionUpdated => switch (data['kind']) {
+          SubscriptionKind.paid => 'Payment received for ${text('venue_name', 'your ground')}',
+          SubscriptionKind.free => 'More free time for ${text('venue_name', 'your ground')}',
+          _ => 'Free trial for ${text('venue_name', 'your ground')}',
+        },
+      NotificationTypes.subscriptionEnding =>
+        "${text('venue_name', 'Your ground')}'s ${_subscriptionNoun(data['kind'])} ends soon",
+      NotificationTypes.subscriptionEnded => '${text('venue_name', 'Your ground')} is hidden from players',
+      NotificationTypes.subscriptionLapsed => "${text('venue_name', 'A ground')}'s subscription ended",
       _ => appName,
     };
+  }
+
+  /// A subscription notification's last day, 'Sun 2 Nov' (its period ends at
+  /// the midnight after); null if it doesn't say.
+  static String? _subscriptionLastDay(Map<String, dynamic> data) {
+    final end = DateTime.tryParse(data['ends_at'] as String? ?? '');
+    return end == null ? null : dayLabel(BhutanTime.dayOf(end.subtract(const Duration(seconds: 1))));
   }
 
   /// A booking notification's court and time: 'Court A · Sat 4 Oct, 6 pm – 8 pm'.
@@ -997,6 +1115,9 @@ class AppStrings {
 
   static String notificationBody(String type, Map<String, dynamic> data) {
     final note = (data['note'] as String? ?? data['reason'] as String? ?? '').trim();
+    final lastDay = _subscriptionLastDay(data);
+    final until = lastDay == null ? '' : ' until $lastDay';
+    final fee = data['fee_nu'] as int?;
     return switch (type) {
       NotificationTypes.welcome => switch (data['role']) {
           UserRole.worker => 'Set up your worker profile. Our team checks it before customers can see you.',
@@ -1042,6 +1163,18 @@ class AppStrings {
         'The request is cancelled, so the time is free again. Try another time or ground.',
       NotificationTypes.bookingCompleted => 'Tap to leave a review.',
       NotificationTypes.venueReviewNew || NotificationTypes.venueReviewUpdated => 'Tap to see your reviews.',
+      NotificationTypes.subscriptionUpdated => switch (data['kind']) {
+          SubscriptionKind.paid =>
+            [if (data['amount_nu'] case final int amount) PriceUtils.nu(amount), 'Paid$until.'].join(' · '),
+          SubscriptionKind.free => 'Listed for free$until.',
+          _ => 'Listed for free$until. After that, '
+              '${fee == null ? 'a monthly subscription' : feePerMonth(fee)} keeps it listed for players.',
+        },
+      NotificationTypes.subscriptionEnding => '${lastDay == null ? '' : 'Last day: $lastDay. '}${payNextMonth(fee)}',
+      NotificationTypes.subscriptionEnded =>
+        'Its ${_subscriptionNoun(data['kind'])} ended${lastDay == null ? '' : ' on $lastDay'}. ${payToListAgain(fee)}',
+      NotificationTypes.subscriptionLapsed => "${lastDay == null ? '' : 'Last day: $lastDay. '}Players can't find "
+          'it until you record a payment or give free time.',
       _ => '',
     };
   }

@@ -58,6 +58,22 @@ void main() {
     expect(find.text('Thimphu'), findsOneWidget);
   });
 
+  testWidgets('C1 for someone who signed up to find workers: home services only, no sports grounds',
+      (tester) async {
+    await openHome(tester); // a customer, and nothing else
+
+    expect(find.text('Plumber'), findsOneWidget);
+    expect(find.text(AppStrings.sportsGrounds), findsNothing);
+    expect(find.text(AppStrings.homeServices), findsNothing); // no picker for a single service
+    expect(find.text(AppStrings.searchGrounds), findsNothing);
+  });
+
+  testWidgets('C1 shows sports grounds too to admins', (tester) async {
+    await pumpApp(tester, role: UserRole.admin, loggedIn: true, hasPassword: true, directory: directory());
+    expect(find.text(AppStrings.homeServices), findsOneWidget);
+    expect(find.text(AppStrings.sportsGrounds), findsOneWidget);
+  });
+
   testWidgets('C2 lists only workers offering the service in the chosen dzongkhag',
       (tester) async {
     await openHome(tester);

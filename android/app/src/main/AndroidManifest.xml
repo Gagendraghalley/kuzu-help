@@ -1,10 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Debug builds get INTERNET automatically; release builds need it declared here. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- geolocator: how far sports grounds are, and managers marking where their
          ground is (precise). Only asked for when someone taps something that needs it. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- geolocator adds this for location updates from a foreground service, which the
+         app never runs (it reads the location once, while open). Removed, so Google Play
+         doesn't ask for a foreground service declaration. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" tools:node="remove"/>
     <!-- image_picker needs no permissions on Android (it uses the system photo picker and
          camera app). Do NOT add CAMERA here: declaring it without requesting it at runtime
          makes camera capture fail. -->

@@ -23,9 +23,13 @@ final chosenRoleProvider = StateProvider<String?>((ref) => null);
 final otpRequestProvider = StateProvider<OtpRequest?>((ref) => null);
 
 /// The role picked on Welcome by someone who signed up with 'Continue with
-/// Google' (A3), until the splash (A1) has given it to their account. Null
-/// when they logged in with Google.
-final googleSignUpRoleProvider = StateProvider<String?>((ref) => null);
+/// Google' or 'Continue with Apple' (A3), until the splash (A1) has given it
+/// to their account. Null when they logged in that way.
+final socialSignUpRoleProvider = StateProvider<String?>((ref) => null);
+
+/// The name Apple shared on someone's first 'Continue with Apple' (A3), until
+/// the splash (A1) has put it on their profile.
+final appleNameProvider = StateProvider<String?>((ref) => null);
 
 /// Where a visitor tapped 'Log in to book' (a ground's booking screen). Once
 /// they have logged in (and set a password, if new), the splash (A1) opens
@@ -58,27 +62,36 @@ final startRouteProvider = FutureProvider.autoDispose<String>((ref) async {
     ref.invalidate(myProfileProvider); // screens read the new roles
     profile = (await profiles.getMyProfile())!;
   }
-  // Signed up with Google: the database made a new account a customer, so it
-  // now takes the role they picked (claim_signup_role). An account that was
-  // there already gets home services or sports grounds added, as above.
-  final googleRole = ref.read(googleSignUpRoleProvider);
-  if (googleRole != null) {
-    if (googleRole == UserRole.worker || googleRole == UserRole.player) {
-      await profiles.claimSignUpRole(googleRole);
+  // Signed up with Apple: the database made the profile without a name.
+  final appleName = ref.read(appleNameProvider);
+  if (appleName != null) {
+    await profiles.setMyNameIfEmpty(appleName);
+    ref.read(appleNameProvider.notifier).state = null;
+    ref.invalidate(myProfileProvider);
+    profile = (await profiles.getMyProfile())!;
+  }
+  // Signed up with Google or Apple: the database made a new account a
+  // customer, so it now takes the role they picked (claim_signup_role). An
+  // account that was there already gets home services or sports grounds
+  // added, as above.
+  final socialRole = ref.read(socialSignUpRoleProvider);
+  if (socialRole != null) {
+    if (socialRole == UserRole.worker || socialRole == UserRole.player) {
+      await profiles.claimSignUpRole(socialRole);
     }
-    if (UserRole.addable.contains(googleRole) && !(await profiles.getMyProfile())!.hasRole(googleRole)) {
-      await profiles.addRole(googleRole);
+    if (UserRole.addable.contains(socialRole) && !(await profiles.getMyProfile())!.hasRole(socialRole)) {
+      await profiles.addRole(socialRole);
     }
-    ref.read(googleSignUpRoleProvider.notifier).state = null;
+    ref.read(socialSignUpRoleProvider.notifier).state = null;
     ref.invalidate(myProfileProvider);
     profile = (await profiles.getMyProfile())!;
   }
   // A5 next: every new user, and anyone who has just used 'Forgot password?'.
   // Except admins (made in the SQL editor): they may log in with an email code
-  // alone, and can set a password in Settings. And except Google accounts,
-  // which log in with Google; they too can set a password in Settings.
+  // alone, and can set a password in Settings. And except Google and Apple
+  // accounts, which log in that way; they too can set a password in Settings.
   final resettingPassword = ref.read(otpRequestProvider)?.isPasswordReset ?? false;
-  final needsPassword = !auth.hasPassword && !auth.usesGoogle;
+  final needsPassword = !auth.hasPassword && !auth.usesGoogle && !auth.usesApple;
   if ((needsPassword || resettingPassword) && profile.role != UserRole.admin) {
     return Routes.setPassword;
   }
@@ -146,16 +159,36 @@ class AuthActions {
   /// log in. Google's account picker opens; the first time, the account is
   /// made then and the splash (A1) gives it the role. Returns false when the
   /// picker is closed. On success the router takes the user on.
-  Future<bool> continueWithGoogle() async {
+  /// Logging in (no role picked) throws [AccountProblem.noAccount] for a
+  /// Google account whose email no account uses, and makes none.
+  Future<bool> continueWithGoogle() =>
+      _continueWith((beforeSignIn) => _repo.signInWithGoogle(beforeSignIn: beforeSignIn));
+
+  /// A3 'Continue with Apple' (iPhones), the same way with Apple's sheet. The
+  /// first time, the splash also gives the account the name Apple shared.
+  Future<bool> continueWithApple() => _continueWith((beforeSignIn) => _repo.signInWithApple(
+      beforeSignIn: beforeSignIn, onName: (name) => _ref.read(appleNameProvider.notifier).state = name));
+
+  Future<bool> _continueWith(
+      Future<bool> Function(Future<void> Function(String? email)? beforeSignIn) signIn) async {
     _forgetCodeRequest();
     final role = _ref.read(chosenRoleProvider);
     // Set before signing in: the splash starts as soon as they're logged in.
-    _ref.read(googleSignUpRoleProvider.notifier).state = role;
+    _ref.read(socialSignUpRoleProvider.notifier).state = role;
     var signedIn = false;
     try {
-      return signedIn = await _repo.signInWithGoogle();
+      // Logging in only goes into an account that's there. Otherwise a new
+      // Google or Apple account would be made a customer without them ever
+      // choosing how they'll use Kuzu Help: they sign up from Welcome instead.
+      return signedIn = await signIn(role == null ? _mustHaveAccount : null);
     } finally {
-      if (!signedIn) _ref.read(googleSignUpRoleProvider.notifier).state = null;
+      if (!signedIn) _forgetCodeRequest();
+    }
+  }
+
+  Future<void> _mustHaveAccount(String? email) async {
+    if (email == null || !await _repo.isEmailRegistered(email.trim().toLowerCase())) {
+      throw AccountProblem.noAccount;
     }
   }
 
@@ -174,10 +207,12 @@ class AuthActions {
     return _repo.signOut();
   }
 
-  /// Also forgets a Google sign-up's role, so it can't go to another account.
+  /// Also forgets a Google or Apple sign-up's role and name, so they can't go
+  /// to another account.
   void _forgetCodeRequest() {
     _ref.read(otpRequestProvider.notifier).state = null;
-    _ref.read(googleSignUpRoleProvider.notifier).state = null;
+    _ref.read(socialSignUpRoleProvider.notifier).state = null;
+    _ref.read(appleNameProvider.notifier).state = null;
   }
 
   /// For an account that exists, a plain log-in code: no new user.
@@ -191,7 +226,8 @@ enum AccountProblem implements Exception {
   /// in instead.
   alreadyRegistered,
 
-  /// Logging in with an email no account uses: sign up instead.
+  /// Logging in with an email no account uses, typed or from Google or
+  /// Apple: sign up instead.
   noAccount,
 }
 

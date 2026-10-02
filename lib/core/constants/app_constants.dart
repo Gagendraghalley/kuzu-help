@@ -93,6 +93,23 @@ class PaymentStatus {
   static const paid = 'paid';                      // the owner marked it paid
 }
 
+/// venue_subscription_periods.kind values (supabase/updates.sql, section 14).
+class SubscriptionKind {
+  static const trial = 'trial'; // a new ground's first month, free
+  static const free = 'free';   // free time an admin gave
+  static const paid = 'paid';   // a month paid for
+}
+
+/// How a ground paid for a month (venue_subscription_periods.payment_method).
+class BillingMethod {
+  static const mbob = 'mbob_transfer';
+  static const mpay = 'mpay_transfer';
+  static const bank = 'bank_transfer';
+  static const cash = 'cash';
+  static const other = 'other';
+  static const all = [mbob, mpay, bank, cash, other];
+}
+
 /// job_requests.status values (supabase/updates.sql, section 11).
 class JobStatus {
   static const pending = 'pending';
@@ -154,6 +171,11 @@ class NotificationTypes {
   static const bookingCompleted = 'booking_completed';       // the customer
   static const venueReviewNew = 'venue_review_new';          // the manager
   static const venueReviewUpdated = 'venue_review_updated';  // the manager
+  // Ground subscriptions (supabase/updates.sql, section 14)
+  static const subscriptionUpdated = 'subscription_updated'; // the manager: a free month, free time or a payment
+  static const subscriptionEnding = 'subscription_ending';   // the manager: 7, 3 and 1 days before it ends
+  static const subscriptionEnded = 'subscription_ended';     // the manager: their ground is hidden
+  static const subscriptionLapsed = 'subscription_lapsed';   // admins: a ground's subscription ended
 }
 
 /// C3: which contact button a customer tapped (record_contact in updates.sql).
@@ -177,4 +199,8 @@ class AppConstants {
   static const bookingDaysAhead = 7;
   // How far ahead a manager can block time (repairs, a tournament).
   static const blockDaysAhead = 60;
+  // Match record_subscription_payment and send_subscription_notices in
+  // supabase/updates.sql, section 14: the next month can be paid, and the
+  // manager is reminded, in a subscription's last 7 days.
+  static const subscriptionNoticeDays = 7;
 }

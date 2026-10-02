@@ -1,6 +1,7 @@
 import 'package:bhutan_services/core/strings/app_strings.dart';
 import 'package:bhutan_services/core/utils/error_messages.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
@@ -38,9 +39,23 @@ void main() {
     expect(ErrorMessages.from(table), AppStrings.databaseUpdateNeeded);
   });
 
+  test("a ground's subscription has ended, or an admin pays a second month ahead", () {
+    const ended = PostgrestException(message: "This ground's subscription has ended", code: 'KH402');
+    const ahead = PostgrestException(message: 'Already paid until ...', code: 'KH409');
+    expect(ErrorMessages.from(ended), AppStrings.subscriptionEndedError);
+    expect(ErrorMessages.from(ahead), AppStrings.oneMonthAtATime);
+  });
+
   test('the delete-account Edge Function is not deployed', () {
     expect(ErrorMessages.from(const FunctionException(status: 404)), AppStrings.accountDeletionNotSetUp);
     expect(ErrorMessages.from(const FunctionException(status: 500)), AppStrings.genericError);
+  });
+
+  test("Apple's sheet failing, or Google or Apple not turned on in Supabase", () {
+    const apple = SignInWithAppleAuthorizationException(code: AuthorizationErrorCode.failed, message: '');
+    const off = AuthException('Provider is not enabled', statusCode: '400', code: 'provider_disabled');
+    expect(ErrorMessages.from(apple), AppStrings.appleSignInFailed);
+    expect(ErrorMessages.from(off), AppStrings.signInMethodOff);
   });
 
   test('anything else gets the general message', () {

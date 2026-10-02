@@ -8,6 +8,7 @@ import '../../shared/models/app_notification.dart';
 import '../admin/providers/admin_providers.dart';
 import '../customer/providers/worker_details_providers.dart';
 import '../grounds/providers/booking_providers.dart';
+import '../grounds/providers/subscription_providers.dart';
 import '../grounds/providers/venue_providers.dart';
 import '../jobs/providers/job_providers.dart';
 import '../profile/providers/profile_providers.dart';
@@ -69,5 +70,15 @@ void openNotification(BuildContext context, WidgetRef ref, AppNotification n) {
           NotificationTypes.bookingCompleted:
       ref.invalidate(myBookingsProvider);
       context.push(Routes.myBookings);
+    // Subscriptions: the ground's Subscription page, with its billing
+    // details (the manager), or the way to record a payment (admins).
+    case NotificationTypes.subscriptionUpdated ||
+          NotificationTypes.subscriptionEnding ||
+          NotificationTypes.subscriptionEnded ||
+          NotificationTypes.subscriptionLapsed
+        when venueId != null:
+      ref.invalidate(venueDetailsProvider(venueId));
+      ref.invalidate(subscriptionPeriodsProvider(venueId));
+      context.push(Routes.venueSubscriptionFor(venueId));
   }
 }

@@ -174,6 +174,23 @@ function bookingTime(data: Data): string {
   return parts.join(" · ");
 }
 
+/** 'Nu. 1,500', as PriceUtils.nu. */
+const nu = (amount: number) => `Nu. ${String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+const num = (value: unknown) => (typeof value === "number" ? value : undefined);
+
+/** A subscription's last day, 'Sun 2 Nov' (it ends at the midnight after), as AppStrings._subscriptionLastDay. */
+function subscriptionLastDay(data: Data): string | undefined {
+  const endMs = Date.parse(str(data.ends_at) ?? "");
+  return Number.isNaN(endMs) ? undefined : dayLabel(bhutan(endMs - 1000));
+}
+
+const subscriptionNoun = (kind: unknown) =>
+  kind === "paid" ? "subscription" : kind === "free" ? "free time" : "free trial";
+const payNextMonth = (fee?: number) =>
+  `Pay ${fee === undefined ? "" : `${nu(fee)} `}for the next month to stay listed for players.`;
+const payToListAgain = (fee?: number) =>
+  `Pay ${fee === undefined ? "" : `${nu(fee)} `}for the next month to list it again.`;
+
 const reportReason = (code: string) =>
   ({
     did_not_show_up: "Did not show up",
@@ -222,12 +239,24 @@ export function pushTitle(type: string, data: Data): string {
     case "booking_completed": return `How was ${text(data, "venue_name", "the ground")}?`;
     case "venue_review_new": return `A customer rated your ground ${starsLabel(rating)}`;
     case "venue_review_updated": return `A customer changed their rating of your ground to ${starsLabel(rating)}`;
+    case "subscription_updated":
+      return data.kind === "paid"
+        ? `Payment received for ${text(data, "venue_name", "your ground")}`
+        : data.kind === "free"
+        ? `More free time for ${text(data, "venue_name", "your ground")}`
+        : `Free trial for ${text(data, "venue_name", "your ground")}`;
+    case "subscription_ending": return `${text(data, "venue_name", "Your ground")}'s ${subscriptionNoun(data.kind)} ends soon`;
+    case "subscription_ended": return `${text(data, "venue_name", "Your ground")} is hidden from players`;
+    case "subscription_lapsed": return `${text(data, "venue_name", "A ground")}'s subscription ended`;
     default: return "Kuzu Help";
   }
 }
 
 export function pushBody(type: string, data: Data): string {
   const note = (str(data.note) ?? str(data.reason) ?? "").trim();
+  const lastDay = subscriptionLastDay(data);
+  const until = lastDay === undefined ? "" : ` until ${lastDay}`;
+  const fee = num(data.fee_nu);
   switch (type) {
     case "welcome":
       return data.role === "worker"
@@ -272,6 +301,19 @@ export function pushBody(type: string, data: Data): string {
     case "booking_completed": return "Tap to leave a review.";
     case "venue_review_new":
     case "venue_review_updated": return "Tap to see your reviews.";
+    case "subscription_updated": {
+      const amount = num(data.amount_nu);
+      return data.kind === "paid"
+        ? [amount === undefined ? undefined : nu(amount), `Paid${until}.`].filter((s) => s !== undefined).join(" · ")
+        : data.kind === "free"
+        ? `Listed for free${until}.`
+        : `Listed for free${until}. After that, ${fee === undefined ? "a monthly subscription" : `${nu(fee)} a month`} keeps it listed for players.`;
+    }
+    case "subscription_ending": return `${lastDay === undefined ? "" : `Last day: ${lastDay}. `}${payNextMonth(fee)}`;
+    case "subscription_ended":
+      return `Its ${subscriptionNoun(data.kind)} ended${lastDay === undefined ? "" : ` on ${lastDay}`}. ${payToListAgain(fee)}`;
+    case "subscription_lapsed":
+      return `${lastDay === undefined ? "" : `Last day: ${lastDay}. `}Players can't find it until you record a payment or give free time.`;
     default: return "";
   }
 }

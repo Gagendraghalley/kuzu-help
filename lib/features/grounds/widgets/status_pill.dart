@@ -4,6 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/ground_booking.dart';
+import '../../../shared/models/subscription.dart';
 import '../../../shared/models/venue.dart';
 
 /// A short status in a soft pill of [color]: a booking's, a venue's.
@@ -55,8 +56,9 @@ class BookingStatusChip extends StatelessWidget {
   }
 }
 
-/// A venue's status for its manager and admins: taking bookings, paused, or
-/// no manager yet (so nobody can book it).
+/// A venue's status for its manager and admins: taking bookings, paused,
+/// hidden (its subscription has ended), or no manager yet (so nobody can
+/// book it).
 class VenueStatusPill extends StatelessWidget {
   final Venue venue;
 
@@ -65,12 +67,32 @@ class VenueStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StatusPill(
-      label: AppStrings.venueStatusLabel(active: venue.isActive, hasManager: venue.hasManager),
-      color: !venue.hasManager
+      label: AppStrings.venueStatusLabel(
+          active: venue.isActive, hasManager: venue.hasManager, subscriptionEnded: venue.subscriptionEnded),
+      color: !venue.hasManager || venue.subscriptionEnded
           ? AppColors.error
           : venue.isActive
               ? AppColors.verified
               : AppColors.unavailable,
     );
+  }
+}
+
+/// A ground's subscription for its manager and admins: green while it has
+/// time, orange in its last days (pay for the next month), red once it has
+/// ended (players can't find it).
+class SubscriptionPill extends StatelessWidget {
+  final VenueSubscription subscription;
+
+  const SubscriptionPill({super.key, required this.subscription});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = subscription;
+    if (s.isEnded()) return const StatusPill(label: AppStrings.subscriptionEnded, color: AppColors.error);
+    if (s.endsSoon()) {
+      return StatusPill(label: AppStrings.subscriptionDaysLeft(s.kind, s.daysLeft()), color: AppColors.primaryDeep);
+    }
+    return StatusPill(label: AppStrings.subscriptionUntil(s.kind, s.lastDay), color: AppColors.verified);
   }
 }

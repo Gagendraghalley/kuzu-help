@@ -1,5 +1,6 @@
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/geo_utils.dart';
+import 'subscription.dart';
 
 /// A venue: one row of the venue_directory view (listed venues, what
 /// customers see), or, for its manager and admins, of the venues table with
@@ -33,6 +34,8 @@ class Venue {
   final String? managerPhone;
   final bool managerActive; // false once an admin deactivates the manager
   final bool isActive; // false: bookings are paused
+  // Null in venue_directory rows: those are all subscribed.
+  final VenueSubscription? subscription;
 
   const Venue({
     required this.id,
@@ -61,6 +64,7 @@ class Venue {
     this.managerPhone,
     this.managerActive = true,
     this.isActive = true,
+    this.subscription,
   });
 
   /// venues columns plus the manager's name, contacts and whether they are
@@ -100,14 +104,25 @@ class Venue {
       managerPhone: manager?['phone'] as String?,
       managerActive: manager?['is_active'] as bool? ?? true,
       isActive: json['is_active'] as bool? ?? true,
+      subscription: switch (json['subscription_ends_at']) {
+        final String endsAt => VenueSubscription(
+            endsAt: DateTime.parse(endsAt),
+            kind: json['subscription_kind'] as String? ?? SubscriptionKind.trial,
+            feeNu: json['subscription_fee_nu'] as int?,
+          ),
+        _ => null,
+      },
     );
   }
 
   bool get hasManager => managerId != null;
 
+  /// Its subscription has ended, so players can't find or book it.
+  bool get subscriptionEnded => subscription?.isEnded() ?? false;
+
   /// Customers can find and book it (the database also checks that a ground
   /// is taking bookings).
-  bool get isListed => hasManager && managerActive && isActive;
+  bool get isListed => hasManager && managerActive && isActive && !subscriptionEnded;
 
   /// 'Town, Dzongkhag', or whichever of the two is known.
   String get location =>

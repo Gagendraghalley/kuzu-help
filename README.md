@@ -27,7 +27,7 @@ changed.
 1. Unzip this folder and open a terminal inside `bhutan_services/`.
 2. The Android and iOS platform folders are already generated with the organisation ID
    `bt.kuzuhelp`: the app ID is `bt.kuzuhelp.app` on Android (the package name registered
-   in the Google Play Console) and `bt.kuzuhelp.bhutanServices` on iOS. These cannot be
+   in the Google Play Console) and `bt.gov.kuzuhelp` on iOS. These cannot be
    changed after publishing.
 
 3. Install packages:
@@ -101,7 +101,9 @@ changed.
      and Customer Home shows it under the English name. The rest of the app is English
      until its text (all in `app_strings.dart`) is translated.
    - **Sports grounds** (section 13): Customer Home offers Home services (the workers
-     above) and Sports grounds. A third, Party & dining, is hidden until it's ready
+     above), and Sports grounds only to accounts that use them too (the player role) and
+     to admins: someone who signed up to find workers sees home services only. A third,
+     Party & dining, is hidden until it's ready
      (`showPartyDining` in `customer_home_screen.dart`). An admin
      registers each futsal or football ground together with its **ground manager**, the one
      person who runs it (Settings → Sports grounds → Register a ground: the ground's details,
@@ -134,10 +136,10 @@ changed.
      in' takes them there, then back to the ground. People who sign up from a ground are
      **players** (role `player`), apart from customers, who use the home services; a
      player's home is the grounds and their bookings. One email can use both services:
-     signing up for the other one with the same email (or 'Use this account for …' in
-     Settings, or on a ground's booking screen) adds that role to the account
-     (`profiles.roles`, `add_my_role`), and a customer who plays too keeps Customer Home,
-     which has sports grounds as well. Only accounts with the player role can book a
+     signing up for the other one with the same email (or 'Use this account for sports
+     grounds' on a ground's booking screen, after 'Log in to book') adds that role to the
+     account (`profiles.roles`, `add_my_role`), and a customer who plays too keeps Customer
+     Home, which then has sports grounds as well. Only accounts with the player role can book a
      ground. Cover photos go in the public `venue-photos` bucket.
      **Finding grounds**: 'Search grounds by name or place' finds them anywhere in Bhutan by
      name, town or dzongkhag. Under 'Location on the map' (Edit ground, or when registering
@@ -158,6 +160,28 @@ changed.
      **ground**. In the database it is a `venues` row with one `grounds` row (its type and
      price) and that row's `ground_time_slots` (its timings).
      Don't run the older 'Migration 02' draft: section 13 replaces it.
+   - **Ground subscriptions** (section 14): each ground pays Kuzu Help every month to be
+     listed for players. A new ground gets its **first month free** when it's registered
+     (grounds registered before this update get theirs when you run it, and their managers
+     are told). After that an admin records each month's payment on the ground's
+     **Subscription** page (Settings → Sports grounds → the ground → Subscription): the
+     amount, how it was paid (mBoB, mPay, bank transfer, cash) and the journal number. A
+     payment is always exactly **one month**, and can only be recorded in the last 7 days
+     of the current period (or once it has ended), so no ground pays more than a month at
+     a time. Admins can also **Give free time** of any length (a week to a year at once,
+     as often as they like) and change each ground's monthly fee. **Billing settings** (the
+     receipt icon on Sports grounds) holds the fee new grounds get and how managers pay
+     Kuzu Help (e.g. an mBoB account), shown to every manager. Only admins can change any
+     of it: the database refuses everyone else. Managers see their subscription on their
+     home (at the top, in orange, in its last 7 days; in red once it has ended) and on its
+     page, with the fee, how to pay and the billing history. When a subscription ends, the
+     ground disappears from players' lists, search and its page, nobody can book it, and
+     its manager can't add bookings by phone or regular bookings until the next payment
+     is recorded; bookings already made stay. Notifications: the manager when the free
+     month starts, free time is given or a payment is recorded (a receipt), 7, 3 and 1
+     days before the end, and when it ends; admins when one ends. **The reminders need
+     pg_cron**: Database → Extensions → turn on pg_cron, then run `updates.sql` again (it
+     schedules them every hour). Deploy `send-push` again for their push wording.
 
    **Ground managers' accounts** (Register a venue, and Change manager on a venue): deploy `supabase/functions/create-venue-manager/` the same way as `delete-account`
    below, named `create-venue-manager`. Only admins can call it. It makes the account
@@ -248,7 +272,7 @@ It needs a paid Apple Developer team (this project uses team `6E2JNTTC36`), and:
    works for builds run from Xcode / `flutter run`; TestFlight and App Store builds need
    one that includes **Production**. Keep the `.p8` private: it can send notifications to
    every app on the team. It goes only into Firebase, never into the app or git.
-2. **Firebase**: *Add app → iOS* with the bundle ID `bt.kuzuhelp.bhutanServices`. From its
+2. **Firebase**: *Add app → iOS* with the bundle ID `bt.gov.kuzuhelp`. From its
    `GoogleService-Info.plist` (again, only read it) copy `GOOGLE_APP_ID` into
    `FIREBASE_IOS_APP_ID` and `API_KEY` into `FIREBASE_IOS_API_KEY` in `config/dev.json`.
    Then Project settings → Cloud Messaging → Apple app configuration → *APNs Authentication
@@ -279,9 +303,11 @@ before. The app uses Google's own account picker and hands Supabase the ID token
      ~/.android/debug.keystore -alias androiddebugkey -storepass android`), the upload key in
      `android/key.properties`, and Play Console → *Test and release → App integrity → App
      signing key*. Nothing from these goes into the app.
-   - **iOS**: bundle ID `bt.kuzuhelp.bhutanServices`. Its Client ID goes into
+   - **iOS**: bundle ID `bt.gov.kuzuhelp`. Its Client ID goes into
      `GOOGLE_IOS_CLIENT_ID`, and its *iOS URL scheme* (`com.googleusercontent.apps.…`)
      replaces `com.googleusercontent.apps.YOUR-IOS-CLIENT-ID` in `ios/Runner/Info.plist`.
+     (The iOS app was `bt.kuzuhelp.bhutanServices` before; an iOS client made for that
+     only needs its Bundle ID changed, and keeps its Client ID.)
 3. **Supabase** → Authentication → Sign In / Providers → **Google**: turn it on. *Client
    IDs*: the Web client ID, a comma, then the iOS client ID. *Client Secret*: the Web
    client's secret. Leave *Skip nonce checks* off (the app sends a nonce). Save.
@@ -290,6 +316,10 @@ before. The app uses Google's own account picker and hands Supabase the ID token
    account: you land on Customer Home with your Google name.
 
 How it fits the rest of sign-up:
+- Google (and Apple) only make an account when signing up, i.e. after picking on Welcome
+  how they'll use Kuzu Help. Logging in with a Google or Apple account whose email no
+  account uses says *No account uses this email yet*, as logging in with a password does,
+  and makes nothing (the app checks `is_email_registered` before Supabase signs in).
 - The database makes every new Google account a customer (Google can't carry the role the
   way the email code's metadata does). Right after, the splash calls `claim_signup_role`,
   which makes it a worker or player when that's what they picked on Welcome. It only works
@@ -303,6 +333,72 @@ How it fits the rest of sign-up:
   password* (or with *Forgot password?*) to log in with email too.
 - If the button shows an error, check the Web client ID in both `config/dev.json` and
   Supabase, and on Android the SHA-1 of the key the app was signed with.
+
+## Sign in with Apple (iPhone)
+
+App Review asks apps that offer Continue with Google to offer Sign in with Apple too
+(guideline 4.8), so iPhones show **Continue with Apple** above the Google button; Android
+doesn't. It works like Google: Apple's own sheet, then Supabase gets the ID token
+(`AuthRepository.signInWithApple`).
+
+1. **Apple Developer**: the App ID `bt.gov.kuzuhelp` needs the *Sign in with
+   Apple* capability. `ios/Runner/Runner.entitlements` asks for it, so Xcode adds it when
+   it signs the app (automatic signing).
+2. **Supabase** → Authentication → Sign In / Providers → **Apple**: turn it on. *Client
+   IDs*: `bt.gov.kuzuhelp`. Leave the secret key empty (only signing in on the
+   web needs it). Save.
+3. Test on a real iPhone that is signed in to an Apple ID.
+
+Notes:
+- New accounts get their role as Google ones do (`claim_signup_role`), and skip *Create a
+  password*.
+- Apple shares the person's name only the first time they use their Apple ID with the app,
+  and not in the token; the splash saves it to their profile then. If they chose not to
+  share it, the profile has no name until they add one in Settings → Edit profile. To try
+  a first sign-in again, remove Kuzu Help under *Sign in with Apple* in the iPhone's Apple
+  Account settings.
+- With *Hide My Email*, the account's email is a `…@privaterelay.appleid.com` address.
+  Supabase's emails (the *Forgot password?* code) only reach it once Supabase's sending
+  domain is added under Apple Developer → Services → *Sign in with Apple for Email
+  Communication*. Apple accounts don't need a password, so this only matters to someone
+  who wants to add one.
+- Deleting an account doesn't revoke its Apple sign-in (that needs the secret key and a
+  call from a server); the person can remove it in their Apple Account settings as above.
+
+## One-command release (both stores)
+
+```
+scripts/release.sh
+```
+
+raises the build number in `pubspec.yaml` (1.0.0+6 → 1.0.0+7), cleans, builds the Android
+app bundle and uploads it to Google Play, then builds the iPhone app and uploads it to App
+Store Connect. If one store fails, the other still goes ahead, and the summary says how to
+retry. Before changing anything it checks everything below is in place.
+
+- `scripts/release.sh android` or `scripts/release.sh ios`: one store only.
+- Google Play gets a **draft** release on the production track, which you roll out in Play
+  Console. `--rollout` sends it for review instead, to roll out once Google approves it;
+  `--track internal` (or `alpha`, `beta`) uses a testing track.
+- `--no-bump` keeps the build number, to retry a store whose upload failed.
+- `--dry-run` checks everything and shows what it would do, without changing anything.
+- Apple has no 'release' step here: once the build is processed, pick it on the version's
+  page in App Store Connect → *Add for Review* → *Submit*, as below.
+- Commit `pubspec.yaml` afterwards, so the next release counts on from the new number.
+
+Once, for the Google Play upload (`scripts/play_upload.mjs`, which needs Node.js 18 or newer):
+
+1. Google Cloud console (the Firebase project is fine) → *APIs & Services* → enable the
+   **Google Play Android Developer API**.
+2. *IAM & Admin → Service accounts → Create service account* (no roles needed), then on it
+   *Keys → Add key → JSON*. Save the file as `~/.kuzu-help/play-service-account.json`,
+   outside the project (or set `PLAY_SERVICE_ACCOUNT` to where it is). Keep it private:
+   it can publish the app. Never put it in git.
+3. Play Console → *Users and permissions → Invite new users*: the service account's email
+   (`…@….iam.gserviceaccount.com`), with Kuzu Help's permissions to **release to
+   production** and **release apps to testing tracks**. It can take a few minutes to work.
+
+The iPhone upload uses Xcode's signed-in Apple ID, as in *iOS release build* below.
 
 ## Android release build (Google Play)
 
@@ -321,6 +417,56 @@ flutter build appbundle --release --dart-define-from-file=config/dev.json
 Upload `build/app/outputs/bundle/release/app-release.aab` in the Play Console. To install
 on a phone directly instead, build an APK with `flutter build apk --release` and the same
 `--dart-define-from-file`.
+
+## iOS release build (App Store)
+
+The App Store app is published by team `6E2JNTTC36`, *G2C Office, Royal Government of
+Bhutan*, which the App Store shows as the seller; the Apple ID gagenghaley123@gmail.com is
+a member. Making the app in App Store Connect needs the *Admin* or *App Manager* role in
+the team, and signing for the App Store needs a distribution certificate (or access to
+cloud-managed ones): the team's Account Holder can give these in App Store Connect →
+Users and Access. Xcode signs automatically: sign in with that Apple ID in Xcode →
+Settings → Accounts. The app is iPhone only (iPads run the iPhone version). iPad can be
+added later, but not removed once released.
+
+Once:
+
+1. Open `ios/Runner.xcworkspace` in Xcode, select *Runner* → *Signing & Capabilities*, and
+   check the team is *G2C Office, Royal Government of Bhutan* with no errors. Xcode adds
+   Push Notifications and Sign in with Apple to the App ID `bt.gov.kuzuhelp`.
+2. **App Store Connect** (appstoreconnect.apple.com): the app is *kuzu help* (Apple ID
+   6818068893, SKU `kuzuhelp-ios-001`) with bundle ID `bt.gov.kuzuhelp`. The two must
+   match, or Xcode can't find the app and tries to make a new one.
+3. Fill in the listing, much as in the Play Console: description, keywords, support URL,
+   **Privacy Policy URL** (the hosted `privacy.html`), category, age rating, price (free),
+   and **App Privacy** (what's collected: name, email, phone, photos, location, reviews
+   and other content, as declared in Play's Data safety). Screenshots: at least one of a
+   6.9-inch iPhone (e.g. the iPhone 16 Pro Max simulator).
+4. *App Review Information*: reviewers can't receive the email code, so give them an
+   account that already has a password (email and password), and say in the notes what
+   to try (finding a worker, a sports ground, and that sign-up is by email code).
+
+Each release: raise `version:` in `pubspec.yaml` as for Google Play (the number after `+`
+must go up for every upload to App Store Connect too), then:
+
+```
+flutter build ipa --release --dart-define-from-file=config/dev.json
+```
+
+`flutter build ipa` only builds; it doesn't upload. To upload from the terminal (it signs
+in as the Apple ID in Xcode → Settings → Accounts; `ios/UploadOptions.plist` says where to):
+
+```
+xcodebuild -exportArchive -archivePath build/ios/archive/Runner.xcarchive -exportOptionsPlist ios/UploadOptions.plist -exportPath build/ios/upload -allowProvisioningUpdates
+```
+
+It ends with *Upload succeeded* and *EXPORT SUCCEEDED* (a warning about a missing dSYM for
+`objective_c.framework` is harmless). Or upload `build/ios/ipa/*.ipa` with Apple's
+*Transporter* app, or open `build/ios/archive/Runner.xcarchive` in Xcode → *Distribute App*
+→ *App Store Connect*.
+Once it has been processed (up to about 30 minutes), install it from **TestFlight** on your
+own iPhone and check it, then on the version's page pick the build → *Add for Review* →
+*Submit*. Review usually takes a day or two.
 
 ## Platform settings to add after step 2
 
@@ -343,12 +489,13 @@ on a phone directly instead, build an APK with `flutter build apk --release` and
 | `lib/features/worker` | B1–B5: profile setup, services, verification, pending, dashboard; photos of work |
 | `lib/features/customer` | C1–C5: home, worker list, details, review, report; search by name, saved workers |
 | `lib/features/jobs` | Job requests: the request form, and the list both sides answer from |
-| `lib/features/grounds` | Sports grounds: venues, booking a ground, My bookings, venue reviews; the ground manager's home, grounds, bookings and blocked time |
+| `lib/features/grounds` | Sports grounds: venues, booking a ground, My bookings, venue reviews; the ground manager's home, grounds, bookings and blocked time; subscriptions and billing |
 | `lib/features/profile` | D1: settings, edit profile, change password, logout, delete account |
 | `lib/features/admin` | Workers awaiting approval, Sports venues, Users, Reports, and the 'Admin check' card (approve, reject, deactivate) |
 | `lib/features/notifications` | The bell (unread count) and the Notifications screen |
 | `lib/shared` | Models and reusable widgets |
 | `supabase/` | `schema.sql` (run once), `updates.sql` (run after it; safe to re-run), and the Edge Functions: delete-account (Settings → Delete account), send-push (push notifications) and create-venue-manager (ground managers' accounts) |
+| `scripts/` | `release.sh`: build and upload to both stores in one command; `play_upload.mjs`: its Google Play upload |
 
 Each feature has `screens/` (display only), `providers/` (Riverpod state) and
 `data/` (the only files that talk to Supabase).

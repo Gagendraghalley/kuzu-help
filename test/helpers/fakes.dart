@@ -14,6 +14,7 @@ import 'package:bhutan_services/features/customer/data/report_repository.dart';
 import 'package:bhutan_services/features/customer/data/review_repository.dart';
 import 'package:bhutan_services/features/customer/data/saved_workers_repository.dart';
 import 'package:bhutan_services/features/grounds/data/booking_repository.dart';
+import 'package:bhutan_services/features/grounds/data/subscription_repository.dart';
 import 'package:bhutan_services/features/grounds/data/venue_repository.dart';
 import 'package:bhutan_services/features/jobs/data/job_repository.dart';
 import 'package:bhutan_services/features/notifications/data/notification_repository.dart';
@@ -31,6 +32,7 @@ import 'package:bhutan_services/shared/models/regular_booking.dart';
 import 'package:bhutan_services/shared/models/report.dart';
 import 'package:bhutan_services/shared/models/review.dart';
 import 'package:bhutan_services/shared/models/service_category.dart';
+import 'package:bhutan_services/shared/models/subscription.dart';
 import 'package:bhutan_services/shared/models/venue.dart';
 import 'package:bhutan_services/shared/models/venue_review.dart';
 import 'package:bhutan_services/shared/models/verification.dart';
@@ -106,12 +108,45 @@ class FakeAuthRepository implements AuthRepository {
   bool googlePicksAccount = true;
   int googleSignIns = 0;
 
+  /// The email of the Google or Apple account picked: by default one that
+  /// has an account.
+  String? socialEmail = registeredEmail;
+
   @override
-  Future<bool> signInWithGoogle() async {
+  Future<bool> signInWithGoogle({Future<void> Function(String? email)? beforeSignIn}) async {
     googleSignIns++;
     if (!googlePicksAccount) return false;
+    await beforeSignIn?.call(socialEmail);
     _loggedIn = true;
     usesGoogle = true;
+    _changes.add(null);
+    return true;
+  }
+
+  /// iPhones only, so off unless a test turns it on.
+  @override
+  bool canUseApple = false;
+
+  @override
+  bool usesApple = false;
+
+  /// False: the user closes Apple's sheet instead. [appleName] is the name
+  /// Apple shares (only on an Apple ID's first sign-in), or null.
+  bool applePicksAccount = true;
+  String? appleName;
+  int appleSignIns = 0;
+
+  @override
+  Future<bool> signInWithApple({
+    required void Function(String fullName) onName,
+    Future<void> Function(String? email)? beforeSignIn,
+  }) async {
+    appleSignIns++;
+    if (!applePicksAccount) return false;
+    await beforeSignIn?.call(socialEmail);
+    if (appleName != null) onName(appleName!);
+    _loggedIn = true;
+    usesApple = true;
     _changes.add(null);
     return true;
   }
@@ -174,6 +209,21 @@ class FakeProfileRepository implements ProfileRepository {
       avatarUrl: profile.avatarUrl,
       dzongkhag: dzongkhag,
       town: town,
+    );
+  }
+
+  /// Like the real one: only a profile without a name (as an Apple sign-up
+  /// makes it) takes [fullName].
+  @override
+  Future<void> setMyNameIfEmpty(String fullName) async {
+    if (profile.fullName.isNotEmpty) return;
+    profile = Profile(
+      id: profile.id,
+      fullName: fullName,
+      role: profile.role,
+      roles: profile.roles,
+      email: profile.email,
+      isActive: profile.isActive,
     );
   }
 
@@ -800,12 +850,23 @@ class FakeVenueRepository implements VenueRepository {
   Future<List<Venue>> getMyVenues() async => venues.where((v) => v.managerId == me).toList();
 
   @override
-  Future<void> updateVenue(String venueId, VenueDraft draft, {Uint8List? cover}) async =>
-      _replace(venueId, (v) => venueFrom(draft, id: venueId, manager: v.managerId, active: v.isActive));
+  Future<void> updateVenue(String venueId, VenueDraft draft, {Uint8List? cover}) async => _replace(venueId,
+      (v) => venueFrom(draft, id: venueId, manager: v.managerId, active: v.isActive, subscription: v.subscription));
 
   @override
-  Future<void> setVenueActive(String venueId, bool active) async =>
-      _replace(venueId, (v) => venueFrom(_draftOf(v), id: v.id, manager: v.managerId, active: active));
+  Future<void> setVenueActive(String venueId, bool active) async => _replace(venueId,
+      (v) => venueFrom(_draftOf(v), id: v.id, manager: v.managerId, active: active, subscription: v.subscription));
+
+  /// What section 14's functions do to the venues row (FakeSubscriptionRepository).
+  void setSubscription(String venueId, VenueSubscription subscription) => _replace(
+      venueId,
+      (v) => venueFrom(_draftOf(v),
+          id: v.id,
+          manager: v.managerId,
+          managerName: v.managerName,
+          managerEmail: v.managerEmail,
+          active: v.isActive,
+          subscription: subscription));
 
   /// Like the grounds row: its type and price; the timings stay.
   @override
@@ -849,7 +910,13 @@ class FakeVenueRepository implements VenueRepository {
     final id = 'venue-new-${added.length}';
     final account = accounts.lastOrNull;
     venues.add(venueFrom(draft,
-        id: id, manager: managerId, managerName: account?.fullName, managerEmail: account?.email));
+        id: id,
+        manager: managerId,
+        managerName: account?.fullName,
+        managerEmail: account?.email,
+        // Its free month (start_free_trial).
+        subscription: VenueSubscription(
+            endsAt: VenueSubscription.periodEnd(DateTime.now(), months: 1), kind: SubscriptionKind.trial)));
     savedGrounds.add(ground);
     grounds.add(groundFrom(ground, id: 'ground-new-${savedGrounds.length}', venueId: id));
     return id;
@@ -871,12 +938,95 @@ class FakeVenueRepository implements VenueRepository {
     _replace(
       venueId,
       (v) => venueFrom(_draftOf(v),
-          id: v.id, manager: managerId, managerName: account?.fullName, managerEmail: account?.email, active: v.isActive),
+          id: v.id,
+          manager: managerId,
+          managerName: account?.fullName,
+          managerEmail: account?.email,
+          active: v.isActive,
+          subscription: v.subscription),
     );
   }
 
   static VenueDraft _draftOf(Venue v) => VenueDraft(
       name: v.name, dzongkhag: v.dzongkhag, phone: v.phone, autoConfirm: v.autoConfirm, coordinates: v.coordinates);
+}
+
+/// Like the database (supabase/updates.sql, section 14): the ground's
+/// manager and admins read its billing; only admins ([viewerIsAdmin]) change
+/// it (42501). Each period follows on from the last; payments are one month
+/// at a time, in the last week (KH409).
+class FakeSubscriptionRepository implements SubscriptionRepository {
+  FakeSubscriptionRepository(this.venues, {required this.periods, required this.settings, required this.viewerIsAdmin});
+
+  final FakeVenueRepository venues;
+  final List<SubscriptionPeriod> periods; // latest first
+  SubscriptionSettings settings;
+  final bool viewerIsAdmin;
+
+  VenueSubscription _of(String venueId) => venues.venues.firstWhere((v) => v.id == venueId).subscription!;
+
+  void _adminOnly() {
+    if (!viewerIsAdmin) throw const PostgrestException(message: 'Only admins change subscriptions', code: '42501');
+  }
+
+  void _add(String venueId, String kind,
+      {int months = 0, int days = 0, int? amount, String? method, String? reference, String? note}) {
+    final current = _of(venueId);
+    final next = current.next(months: months, days: days);
+    periods.insert(
+      0,
+      SubscriptionPeriod(
+        id: 'period-${periods.length + 1}',
+        venueId: venueId,
+        kind: kind,
+        startsAt: next.start,
+        endsAt: next.end,
+        amountNu: amount,
+        paymentMethod: method,
+        paymentReference: reference,
+        note: note,
+        createdAt: DateTime.now(),
+      ),
+    );
+    venues.setSubscription(venueId, VenueSubscription(endsAt: next.end, kind: kind, feeNu: current.feeNu));
+  }
+
+  @override
+  Future<List<SubscriptionPeriod>> getPeriods(String venueId) async =>
+      periods.where((p) => p.venueId == venueId).toList();
+
+  @override
+  Future<SubscriptionSettings> getSettings() async => settings;
+
+  @override
+  Future<void> recordPayment(String venueId,
+      {required int amountNu, required String method, String? reference, String? note}) async {
+    _adminOnly();
+    if (!_of(venueId).canPayNextMonth()) {
+      throw const PostgrestException(message: 'Already paid: one month at a time', code: 'KH409');
+    }
+    _add(venueId, SubscriptionKind.paid,
+        months: 1, amount: amountNu, method: method, reference: reference, note: note);
+  }
+
+  @override
+  Future<void> extendFreePeriod(String venueId, {int months = 0, int days = 0, String? note}) async {
+    _adminOnly();
+    _add(venueId, SubscriptionKind.free, months: months, days: days, note: note);
+  }
+
+  @override
+  Future<void> setFee(String venueId, int? feeNu) async {
+    _adminOnly();
+    final s = _of(venueId);
+    venues.setSubscription(venueId, VenueSubscription(endsAt: s.endsAt, kind: s.kind, feeNu: feeNu));
+  }
+
+  @override
+  Future<void> saveSettings(SubscriptionSettings settings) async {
+    _adminOnly();
+    this.settings = settings;
+  }
 }
 
 /// The phone's location: [position], once the app may use it ([allowed]).
@@ -1166,7 +1316,18 @@ AppNotification notice(
       readAt: read ? DateTime(2026, 9, 28) : null,
     );
 
-/// A venue made from what was filled in, run by [manager] (none: null).
+/// A subscription whose last day is [daysLeft] days from today (Bhutan):
+/// 0 is today, negative once it has ended. Nu. 1,500 a month unless [feeNu]
+/// says otherwise.
+VenueSubscription subscriptionFor({int daysLeft = 21, String kind = SubscriptionKind.trial, int? feeNu = 1500}) =>
+    VenueSubscription(
+      endsAt: BhutanTime.at(BhutanTime.today().add(Duration(days: daysLeft + 1)), 0),
+      kind: kind,
+      feeNu: feeNu,
+    );
+
+/// A venue made from what was filled in, run by [manager] (none: null), on
+/// [subscription] (a free trial with 21 days left).
 Venue venueFrom(
   VenueDraft draft, {
   required String id,
@@ -1174,6 +1335,7 @@ Venue venueFrom(
   String? managerName,
   String? managerEmail,
   bool active = true,
+  VenueSubscription? subscription,
 }) =>
     Venue(
       id: id,
@@ -1189,10 +1351,12 @@ Venue venueFrom(
       sports: const [Sport.futsal],
       groundCount: 1,
       fromPriceNu: 1000,
+      subscription: subscription ?? subscriptionFor(),
     );
 
 /// A futsal venue run by 'tashi' unless [manager] says otherwise (null: no
-/// manager yet); taking bookings.
+/// manager yet); taking bookings, on a free trial with 21 days left unless
+/// [subscription] says otherwise.
 Venue venue({
   String id = 'venue-1',
   String? manager = 'tashi',
@@ -1200,12 +1364,14 @@ Venue venue({
   String dzongkhag = 'Thimphu',
   bool autoConfirm = false,
   GeoPoint? coordinates,
+  VenueSubscription? subscription,
 }) =>
     venueFrom(
       VenueDraft(
           name: name, dzongkhag: dzongkhag, phone: '+97517111111', autoConfirm: autoConfirm, coordinates: coordinates),
       id: id,
       manager: manager,
+      subscription: subscription,
     );
 
 /// Every day's times at the test ground: 8-10 am, 4-6 pm, 6-8 pm, 7-9 pm
@@ -1304,6 +1470,7 @@ class Fakes {
     required this.push,
     required this.venues,
     required this.bookings,
+    required this.subscriptions,
     required this.location,
   });
 
@@ -1322,6 +1489,7 @@ class Fakes {
   final FakePushRepository push;
   final FakeVenueRepository venues;
   final FakeBookingRepository bookings;
+  final FakeSubscriptionRepository subscriptions;
   final FakeLocationService location;
 }
 
@@ -1348,6 +1516,9 @@ Future<Fakes> pumpApp(
   List<Ground> grounds = const [],
   List<GroundBooking> bookings = const [],
   List<VenueReview> venueReviews = const [],
+  List<SubscriptionPeriod> subscriptionPeriods = const [], // grounds' billing history, latest first
+  SubscriptionSettings subscriptionSettings =
+      const SubscriptionSettings(defaultFeeNu: 1500, paymentInfo: 'mBoB 200123456 (Kuzu Help)'),
   GeoPoint? myPosition, // where the phone is
   bool locationAllowed = false, // the app may already use it
   bool locationAskedBefore = true, // false: first launch, when the app asks once by itself
@@ -1393,6 +1564,12 @@ Future<Fakes> pumpApp(
     push: FakePushRepository(),
     venues: venueFake,
     bookings: FakeBookingRepository(venueFake.bookings, venueFake),
+    subscriptions: FakeSubscriptionRepository(
+      venueFake,
+      periods: [...subscriptionPeriods],
+      settings: subscriptionSettings,
+      viewerIsAdmin: role == UserRole.admin,
+    ),
     location: FakeLocationService(position: myPosition, allowed: locationAllowed),
   );
   await tester.pumpWidget(ProviderScope(
@@ -1412,6 +1589,7 @@ Future<Fakes> pumpApp(
       pushRepositoryProvider.overrideWithValue(fakes.push),
       venueRepositoryProvider.overrideWithValue(fakes.venues),
       bookingRepositoryProvider.overrideWithValue(fakes.bookings),
+      subscriptionRepositoryProvider.overrideWithValue(fakes.subscriptions),
       locationServiceProvider.overrideWithValue(fakes.location),
     ],
     child: const BhutanServicesApp(),

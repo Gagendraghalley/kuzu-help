@@ -55,12 +55,14 @@ class Routes {
   static const venueBookings = '/venues/:id/bookings';
   static const venueTimings = '/venues/:id/timings';
   static const venueRecords = '/venues/:id/records';
+  static const venueSubscription = '/venues/:id/subscription'; // the manager reads it; admins change it
 
   static String venueManageFor(String id) => '/venues/$id';
   static String editVenueFor(String id) => '/venues/$id/edit';
   static String venueBookingsFor(String id) => '/venues/$id/bookings';
   static String venueTimingsFor(String venueId) => '/venues/$venueId/timings';
   static String venueRecordsFor(String venueId) => '/venues/$venueId/records';
+  static String venueSubscriptionFor(String venueId) => '/venues/$venueId/subscription';
 
   // Shared (Part D)
   static const settings = '/settings';

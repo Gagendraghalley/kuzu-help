@@ -5,24 +5,55 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../grounds/providers/subscription_providers.dart';
 import '../../grounds/providers/venue_providers.dart';
 import '../../grounds/widgets/status_pill.dart';
 import '../../grounds/widgets/venue_card.dart';
+import '../widgets/billing_settings_sheet.dart';
 
-/// Admin: every sports venue, with who runs it. Admins register a venue
-/// together with its manager; tapping one opens it to run like its manager
-/// does, with the manager's card on top.
+/// Admin: every sports venue, with who runs it and its subscription. Admins
+/// register a venue together with its manager; tapping one opens it to run
+/// like its manager does, with the manager's card on top. Billing settings
+/// (the app bar) holds the fee for new grounds and how managers pay.
 class AdminVenuesScreen extends ConsumerWidget {
   const AdminVenuesScreen({super.key});
+
+  Future<void> _openBillingSettings(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final settings = await ref.read(subscriptionSettingsProvider.future);
+      if (!context.mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => BillingSettingsSheet(settings: settings),
+      );
+    } catch (e) {
+      ref.invalidate(subscriptionSettingsProvider); // try again next time
+      messenger.showSnackBar(SnackBar(content: Text(ErrorMessages.from(e))));
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final venues = ref.watch(allVenuesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.sportsVenues)),
+      appBar: AppBar(
+        title: const Text(AppStrings.sportsVenues),
+        actions: [
+          IconButton(
+            tooltip: AppStrings.billingSettings,
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () => _openBillingSettings(context, ref),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add_rounded),
         label: const Text(AppStrings.addVenue),
@@ -56,6 +87,7 @@ class AdminVenuesScreen extends ConsumerWidget {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             VenueStatusPill(venue: venue),
+                            if (venue.subscription case final subscription?) SubscriptionPill(subscription: subscription),
                             if (venue.managerName case final name? when name.trim().isNotEmpty)
                               Text(name, style: const TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w600)),
                           ],

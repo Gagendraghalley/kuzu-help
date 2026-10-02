@@ -29,6 +29,7 @@ import '../../features/grounds/screens/my_bookings_screen.dart';
 import '../../features/grounds/screens/player_home_screen.dart';
 import '../../features/grounds/screens/manager_home_screen.dart';
 import '../../features/grounds/screens/search_venues_screen.dart';
+import '../../features/grounds/screens/subscription_screen.dart';
 import '../../features/grounds/screens/venue_bookings_screen.dart';
 import '../../features/grounds/screens/venue_details_screen.dart';
 import '../../features/grounds/screens/venue_form_screen.dart';
@@ -133,6 +134,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.venueRecords,
         builder: (_, s) => BookingRecordsScreen(venueId: s.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: Routes.venueSubscription,
+        builder: (_, s) => SubscriptionScreen(venueId: s.pathParameters['id']!),
       ),
 
       GoRoute(path: Routes.settings, builder: (_, __) => const SettingsScreen()),

@@ -27,6 +27,8 @@
 --      New accounts made with 'Continue with Google' take the role picked on Welcome (13d).
 --      Admins change users' roles: customer, player and worker (13d).
 --      A customer has one booking of a ground at a time, until it's over (book_ground, 13d).
+--  14. Ground subscriptions: a free month for each new ground, then monthly payments that
+--      admins record, one month at a time; a ground whose subscription has ended is hidden.
 -- The last line makes the app see the changes straight away.
 -- =====================================================================
 
@@ -1363,6 +1365,14 @@ alter table public.venues
 alter table public.venues drop constraint if exists venues_location_check;
 alter table public.venues add constraint venues_location_check
   check ((latitude is null) = (longitude is null));
+-- Its subscription (section 14): listed for players until
+-- subscription_ends_at (a Bhutan midnight), the end of its latest period, of
+-- subscription_kind ('trial', 'free' or 'paid'); and its monthly fee. Only
+-- section 14's functions change them.
+alter table public.venues
+  add column if not exists subscription_ends_at timestamptz,
+  add column if not exists subscription_kind text check (subscription_kind in ('trial', 'free', 'paid')),
+  add column if not exists subscription_fee_nu int check (subscription_fee_nu between 1 and 1000000);
 
 create index if not exists venues_manager_idx on public.venues (manager_id);
 create index if not exists venues_dzongkhag_idx on public.venues (dzongkhag);
@@ -1612,7 +1622,7 @@ as $$
 $$;
 
 -- Customers can see and book it: it has a manager who isn't deactivated,
--- and bookings aren't paused.
+-- bookings aren't paused, and its subscription hasn't ended (section 14).
 create or replace function public.is_listed_venue(venue uuid)
 returns boolean
 language sql
@@ -1622,7 +1632,21 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.venues v join public.profiles p on p.id = v.manager_id
-    where v.id = venue and v.is_active and p.is_active
+    where v.id = venue and v.is_active and p.is_active and v.subscription_ends_at > now()
+  );
+$$;
+
+-- The ground's venue has a subscription that hasn't ended (section 14).
+create or replace function public.ground_subscribed(ground uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.grounds g join public.venues v on v.id = g.venue_id
+    where g.id = ground and v.subscription_ends_at > now()
   );
 $$;
 
@@ -1645,10 +1669,12 @@ as $$
 $$;
 
 revoke execute on function public.is_venue_manager(), public.can_manage_venue(uuid),
-  public.can_manage_ground(uuid), public.is_listed_venue(uuid), public.has_played_at(uuid)
+  public.can_manage_ground(uuid), public.is_listed_venue(uuid), public.has_played_at(uuid),
+  public.ground_subscribed(uuid)
   from public, anon;
 grant execute on function public.is_venue_manager(), public.can_manage_venue(uuid),
-  public.can_manage_ground(uuid), public.is_listed_venue(uuid), public.has_played_at(uuid)
+  public.can_manage_ground(uuid), public.is_listed_venue(uuid), public.has_played_at(uuid),
+  public.ground_subscribed(uuid)
   to authenticated;
 -- Visitors who haven't logged in (the anon role) browse venues too (13c):
 -- the rules they read by call these two.
@@ -1660,7 +1686,8 @@ grant execute on function public.is_listed_venue(uuid), public.is_active_profile
 -- turn security_invoker on for them: visitors and customers would then get
 -- 'permission denied for table venues', or no venues at all. Running this
 -- file again turns it back off.
--- venue_directory: listed venues with at least one ground taking bookings (with timings),
+-- venue_directory: listed venues (as is_listed_venue: with an active manager, not
+-- paused, subscribed) with at least one ground taking bookings (with timings),
 -- their lowest hourly price, sports, rating (from active customers) and place on
 -- the map. (A replaced view can only gain columns at the end.)
 create or replace view public.venue_directory with (security_invoker = false) as
@@ -1703,7 +1730,7 @@ left join lateral (
   join public.profiles c on c.id = vr.customer_id
   where vr.venue_id = v.id and c.is_active
 ) r on true
-where v.is_active and m.is_active;
+where v.is_active and m.is_active and v.subscription_ends_at > now();
 
 -- ground_booking_list: 'My bookings' for customers and the bookings screen
 -- for managers, with the ground and venue. Each user gets the bookings they
@@ -2082,7 +2109,8 @@ $$;
 -- holds the venues columns an admin fills in (name, dzongkhag, phone and
 -- so on), and under 'ground' its type and price (grounds columns: sport,
 -- price_per_hour_nu and so on); its manager adds the timings. [manager] is
--- the account from create-venue-manager. Returns the new venue's ID.
+-- the account from create-venue-manager. Its free month starts now
+-- (start_free_trial, section 14). Returns the new venue's ID.
 create or replace function public.add_venue(details jsonb, manager uuid)
 returns uuid
 language plpgsql
@@ -2120,6 +2148,7 @@ begin
   where jsonb_typeof(details -> 'ground') = 'object';
 
   perform public.set_venue_manager(venue, manager);
+  perform public.start_free_trial(venue); -- after, so the manager is told
   return venue;
 end;
 $$;
@@ -2308,7 +2337,8 @@ $$;
 -- someone who called: [name] and [phone] are theirs. Confirmed at once, so
 -- everyone sees the time as booked; nobody is notified. Same slots, prices
 -- and week ahead as book_ground. Returns the booking's ID. Postgres error
--- 23P01: that time is taken.
+-- 23P01: that time is taken; KH402: the ground's subscription has ended
+-- (admins can still add them).
 create or replace function public.book_by_phone(
   ground uuid,
   start_time timestamptz,
@@ -2329,6 +2359,9 @@ declare
 begin
   if not public.can_manage_ground(ground) or not public.is_active_profile(me) then
     raise exception 'Only the ground''s manager can add bookings' using errcode = '42501';
+  end if;
+  if not public.is_admin() and not public.ground_subscribed(ground) then
+    raise exception 'This ground''s subscription has ended' using errcode = 'KH402';
   end if;
   if nullif(trim(name), '') is null then
     raise exception 'The name of the person who called is needed' using errcode = '22023';
@@ -2509,8 +2542,9 @@ $$;
 -- ground's slots (Postgres error 22023). 23P01: another regular booking has
 -- some of that time, or someone else's booking already has it in the week
 -- ahead (cancel it first); bookings with the same phone number, and
--- [except_booking], are theirs. Returns its ID; null when [regular] isn't
--- one of the ground's.
+-- [except_booking], are theirs. KH402: a new or moved one at a ground whose
+-- subscription has ended (admins can still). Returns its ID; null when
+-- [regular] isn't one of the ground's.
 create or replace function public.save_regular_booking(
   regular uuid,
   ground uuid,
@@ -2544,6 +2578,9 @@ begin
   end if;
   if who is null then
     raise exception 'The name of who books it is needed' using errcode = '22023';
+  end if;
+  if moved and not public.is_admin() and not public.ground_subscribed(ground) then
+    raise exception 'This ground''s subscription has ended' using errcode = 'KH402';
   end if;
   if moved and not exists (
     select 1 from public.ground_time_slots s
@@ -2960,6 +2997,407 @@ create policy "storage: venue photos upload by managers and admins"
 -- ground). Database -> Extensions -> turn on pg_cron, then run this line on
 -- its own:
 -- select cron.schedule('expire-ground-bookings', '*/15 * * * *', $$select public.expire_stale_ground_bookings()$$);
+
+-- ---------------------------------------------------------------------
+-- 14. Ground subscriptions
+-- ---------------------------------------------------------------------
+-- Each ground pays Kuzu Help every month to be listed for players. A new
+-- ground gets its first month free (start_free_trial, from add_venue). After
+-- that an admin records each month's payment (record_subscription_payment):
+-- one month at a time, never more, and only in the last 7 days of the
+-- current period, so nobody pays far ahead. Admins can also give free time
+-- of any length (extend_free_period), and set each ground's monthly fee.
+-- Only admins change subscriptions and billing; a ground's manager reads
+-- them (Settings stays theirs: none of this is in the venues update grant).
+--
+-- Periods follow one another: each starts where the last one ends (or now,
+-- once that has passed, so the time in between isn't charged) and ends at a
+-- Bhutan midnight. venues.subscription_ends_at is the end of the latest.
+-- Once it has passed, players can't find or book the ground
+-- (is_listed_venue, venue_directory), and its manager can't add bookings by
+-- phone or regular bookings (Postgres error KH402) until the next month is
+-- paid. Bookings already made stay as they are, and the manager still sees
+-- and answers them.
+--
+-- The manager is told when a period is added (their free month, free time,
+-- a payment), 7, 3 and 1 days before it ends, and when it has ended; admins
+-- when it has ended (send_subscription_notices, every hour once pg_cron is
+-- on: end of this section).
+
+-- A ground's billing history: its free month, free time, and each month paid.
+create table if not exists public.venue_subscription_periods (
+  id                 uuid primary key default gen_random_uuid(),
+  venue_id           uuid not null references public.venues (id) on delete cascade,
+  kind               text not null check (kind in ('trial', 'free', 'paid')),
+  starts_at          timestamptz not null,
+  ends_at            timestamptz not null,
+  amount_nu          int check (amount_nu between 1 and 1000000), -- paid ones only
+  payment_method     text check (payment_method in ('mbob_transfer', 'mpay_transfer', 'bank_transfer', 'cash', 'other')),
+  payment_reference  text check (char_length(payment_reference) <= 60), -- the mBoB / mPay journal number
+  note               text check (char_length(note) <= 300),
+  created_by         uuid references public.profiles (id) on delete set null, -- null: the database (a free month)
+  created_at         timestamptz not null default now(),
+  check (ends_at > starts_at),
+  check ((kind = 'paid') = (amount_nu is not null and payment_method is not null)),
+  check (kind = 'paid' or payment_reference is null)
+);
+create index if not exists venue_subscription_periods_venue_idx
+  on public.venue_subscription_periods (venue_id, ends_at desc);
+
+-- The reminders each ground's manager has had, so each goes once for each
+-- end: after a payment or free time there's a new end, and they start again.
+create table if not exists public.venue_subscription_notices (
+  venue_id  uuid not null references public.venues (id) on delete cascade,
+  ends_at   timestamptz not null,
+  stage     text not null check (stage in ('7_days', '3_days', '1_day', 'ended')),
+  sent_at   timestamptz not null default now(),
+  primary key (venue_id, ends_at, stage)
+);
+
+-- What admins set once for every ground (one row): the monthly fee new
+-- grounds get (each ground's own is venues.subscription_fee_nu), and how
+-- managers pay Kuzu Help, shown with their subscription.
+create table if not exists public.subscription_settings (
+  id              boolean primary key default true check (id),
+  default_fee_nu  int check (default_fee_nu between 1 and 1000000),
+  payment_info    text check (char_length(payment_info) <= 500),
+  updated_at      timestamptz not null default now()
+);
+insert into public.subscription_settings (id) values (true) on conflict (id) do nothing;
+
+alter table public.venue_subscription_periods enable row level security;
+alter table public.venue_subscription_notices enable row level security;
+alter table public.subscription_settings      enable row level security;
+
+revoke all on public.venue_subscription_periods, public.venue_subscription_notices, public.subscription_settings
+  from anon, authenticated;
+
+-- The ground's manager and admins read its billing history; only the
+-- functions below add to it.
+grant select on public.venue_subscription_periods to authenticated;
+
+drop policy if exists "venue_subscription_periods: the manager and admins read" on public.venue_subscription_periods;
+create policy "venue_subscription_periods: the manager and admins read"
+  on public.venue_subscription_periods for select to authenticated
+  using (public.can_manage_venue(venue_id));
+
+-- Anyone logged in reads how to pay and the fee for new grounds (managers
+-- need them); only set_subscription_settings changes them.
+grant select on public.subscription_settings to authenticated;
+
+drop policy if exists "subscription_settings: everyone logged in reads" on public.subscription_settings;
+create policy "subscription_settings: everyone logged in reads"
+  on public.subscription_settings for select to authenticated
+  using (true);
+
+-- [start_time] plus [add_months] and [add_days] in Bhutan time, rounded up to
+-- the next Bhutan midnight, so a period ends at the end of a day (31 Jan
+-- plus a month ends after 28 Feb, or 29). The app works it out the same way
+-- (VenueSubscription.periodEnd).
+create or replace function public.subscription_period_end(start_time timestamptz, add_months int, add_days int default 0)
+returns timestamptz
+language sql
+stable
+set search_path = ''
+as $$
+  select (case when e = date_trunc('day', e) then e else date_trunc('day', e) + interval '1 day' end)
+         at time zone 'Asia/Thimphu'
+  from (select (start_time at time zone 'Asia/Thimphu') + make_interval(months => add_months, days => add_days) as e) moved;
+$$;
+
+-- Behind start_free_trial, extend_free_period and record_subscription_payment
+-- (only they call it): a period of [add_months] and [add_days] for [venue],
+-- from where its subscription ends, or from now once that has passed. The
+-- trigger below moves the venue's end and tells its manager. Returns its ID.
+create or replace function public.add_subscription_period(
+  venue uuid,
+  period_kind text,
+  add_months int,
+  add_days int,
+  amount int default null,
+  method text default null,
+  reference text default null,
+  period_note text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_end timestamptz;
+  starts timestamptz;
+  period uuid;
+begin
+  -- Two at once for the same venue wait here, so the second starts where the first ends.
+  select v.subscription_ends_at into current_end from public.venues v where v.id = venue for update;
+  if not found then
+    raise exception 'No venue with this ID' using errcode = 'P0002';
+  end if;
+  starts := greatest(coalesce(current_end, now()), now());
+  insert into public.venue_subscription_periods (
+    venue_id, kind, starts_at, ends_at, amount_nu, payment_method, payment_reference, note, created_by
+  )
+  values (
+    venue, period_kind, starts, public.subscription_period_end(starts, add_months, add_days), amount, method,
+    left(nullif(trim(reference), ''), 60), left(nullif(trim(period_note), ''), 300), (select auth.uid())
+  )
+  returning id into period;
+  return period;
+end;
+$$;
+
+-- A new period: the venue is listed until it ends, and its manager is told
+-- (with the ground's fee, for what comes after a free month).
+create or replace function public.handle_subscription_period_added()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v public.venues;
+begin
+  update public.venues
+  set subscription_ends_at = new.ends_at, subscription_kind = new.kind
+  where id = new.venue_id and (subscription_ends_at is null or subscription_ends_at <= new.ends_at);
+  select * into v from public.venues where id = new.venue_id;
+  perform public.add_notification(v.manager_id, 'subscription_updated',
+    jsonb_build_object(
+      'venue_id', v.id,
+      'venue_name', v.name,
+      'kind', new.kind,
+      'starts_at', new.starts_at,
+      'ends_at', new.ends_at,
+      'amount_nu', new.amount_nu,
+      'fee_nu', v.subscription_fee_nu),
+    new.created_by);
+  return new;
+end;
+$$;
+
+drop trigger if exists venue_subscription_periods_added on public.venue_subscription_periods;
+create trigger venue_subscription_periods_added
+  after insert on public.venue_subscription_periods
+  for each row execute function public.handle_subscription_period_added();
+
+-- A new ground's free month (add_venue, and grounds from before
+-- subscriptions, below). Its fee is the one for new grounds, unless it has one.
+create or replace function public.start_free_trial(venue uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.venues
+  set subscription_fee_nu = coalesce(subscription_fee_nu, (select s.default_fee_nu from public.subscription_settings s))
+  where id = venue;
+  perform public.add_subscription_period(venue, 'trial', 1, 0);
+end;
+$$;
+
+-- Admins give a ground free time, as long as they like: [add_months] and
+-- [add_days] (at least a day; at most 24 months and 366 days at once, to
+-- catch typing mistakes). [note] is for the record, e.g. why. Returns the
+-- period's ID.
+create or replace function public.extend_free_period(venue uuid, add_months int, add_days int default 0, note text default null)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() or not public.is_active_profile((select auth.uid())) then
+    raise exception 'Only admins change subscriptions' using errcode = '42501';
+  end if;
+  if add_months is null or add_days is null or add_months not between 0 and 24 or add_days not between 0 and 366
+     or add_months + add_days = 0 then
+    raise exception 'Free time is at least a day, and at most 24 months and 366 days at once' using errcode = '22023';
+  end if;
+  return public.add_subscription_period(venue, 'free', add_months, add_days, period_note => note);
+end;
+$$;
+
+-- Admins record a ground's payment for its next month: [amount] in Ngultrum,
+-- how it was paid ([method]: a payment_method value) and the journal number
+-- ([reference]). Always exactly one month: Postgres error KH409 while more
+-- than 7 days of the current period are left (record it nearer the end), so
+-- no ground pays for more than a month at a time. Returns the period's ID.
+create or replace function public.record_subscription_payment(
+  venue uuid,
+  amount int,
+  method text,
+  reference text default null,
+  note text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_end timestamptz;
+begin
+  if not public.is_admin() or not public.is_active_profile((select auth.uid())) then
+    raise exception 'Only admins record payments' using errcode = '42501';
+  end if;
+  if amount is null or amount not between 1 and 1000000 then
+    raise exception 'The amount is 1 to 1,000,000 Ngultrum' using errcode = '22023';
+  end if;
+  if method is null or method not in ('mbob_transfer', 'mpay_transfer', 'bank_transfer', 'cash', 'other') then
+    raise exception 'Say how it was paid' using errcode = '22023';
+  end if;
+  select v.subscription_ends_at into current_end from public.venues v where v.id = venue for update;
+  if not found then
+    raise exception 'No venue with this ID' using errcode = 'P0002';
+  end if;
+  if current_end > now() + interval '7 days' then
+    raise exception 'Already paid until %: one month at a time, in the last 7 days', current_end using errcode = 'KH409';
+  end if;
+  return public.add_subscription_period(venue, 'paid', 1, 0, amount, method, reference, note);
+end;
+$$;
+
+-- Admins set a ground's monthly fee; null: none set yet. Its manager sees it
+-- with their subscription, and in their reminders.
+create or replace function public.set_subscription_fee(venue uuid, fee int)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() or not public.is_active_profile((select auth.uid())) then
+    raise exception 'Only admins change subscriptions' using errcode = '42501';
+  end if;
+  if fee is not null and fee not between 1 and 1000000 then
+    raise exception 'The fee is 1 to 1,000,000 Ngultrum' using errcode = '22023';
+  end if;
+  update public.venues set subscription_fee_nu = fee where id = venue;
+  if not found then
+    raise exception 'No venue with this ID' using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+-- Admins: the monthly fee new grounds get ([fee], null: none), and how
+-- managers pay ([how_to_pay], blank: not said).
+create or replace function public.set_subscription_settings(fee int, how_to_pay text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() or not public.is_active_profile((select auth.uid())) then
+    raise exception 'Only admins change billing settings' using errcode = '42501';
+  end if;
+  if fee is not null and fee not between 1 and 1000000 then
+    raise exception 'The fee is 1 to 1,000,000 Ngultrum' using errcode = '22023';
+  end if;
+  update public.subscription_settings
+  set default_fee_nu = fee, payment_info = left(nullif(trim(how_to_pay), ''), 500), updated_at = now()
+  where id;
+end;
+$$;
+
+-- Reminders: each ground's manager 7, 3 and 1 days before its subscription
+-- ends, and once it has ended (then admins too, to follow up). Each once for
+-- each end. Grounds that ended more than 7 days ago are left alone (e.g. the
+-- first time this runs). Returns how many were sent. Every hour once pg_cron
+-- is on (below).
+create or replace function public.send_subscription_notices()
+returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v record;
+  reached text;
+  details jsonb;
+  sent int := 0;
+begin
+  for v in
+    select id, name, manager_id, subscription_ends_at, subscription_kind, subscription_fee_nu
+    from public.venues
+    where subscription_ends_at between now() - interval '7 days' and now() + interval '7 days'
+  loop
+    reached := case
+      when v.subscription_ends_at <= now() then 'ended'
+      when v.subscription_ends_at <= now() + interval '1 day' then '1_day'
+      when v.subscription_ends_at <= now() + interval '3 days' then '3_days'
+      else '7_days'
+    end;
+    insert into public.venue_subscription_notices (venue_id, ends_at, stage)
+    values (v.id, v.subscription_ends_at, reached)
+    on conflict do nothing;
+    continue when not found; -- already sent
+    details := jsonb_build_object(
+      'venue_id', v.id,
+      'venue_name', v.name,
+      'kind', v.subscription_kind,
+      'ends_at', v.subscription_ends_at,
+      'fee_nu', v.subscription_fee_nu);
+    if reached = 'ended' then
+      perform public.add_notification(v.manager_id, 'subscription_ended', details);
+      perform public.add_admin_notification('subscription_lapsed', details);
+    else
+      perform public.add_notification(v.manager_id, 'subscription_ending', details);
+    end if;
+    sent := sent + 1;
+  end loop;
+  return sent;
+end;
+$$;
+
+revoke execute on function
+  public.subscription_period_end(timestamptz, int, int),
+  public.add_subscription_period(uuid, text, int, int, int, text, text, text),
+  public.handle_subscription_period_added(),
+  public.start_free_trial(uuid),
+  public.send_subscription_notices()
+  from public, anon, authenticated;
+revoke execute on function
+  public.extend_free_period(uuid, int, int, text),
+  public.record_subscription_payment(uuid, int, text, text, text),
+  public.set_subscription_fee(uuid, int),
+  public.set_subscription_settings(int, text)
+  from public, anon;
+grant execute on function
+  public.extend_free_period(uuid, int, int, text),
+  public.record_subscription_payment(uuid, int, text, text, text),
+  public.set_subscription_fee(uuid, int),
+  public.set_subscription_settings(int, text)
+  to authenticated;
+
+-- Grounds registered before subscriptions start their free month now, and
+-- their managers are told. Running this again changes nothing.
+do $$
+declare
+  venue uuid;
+begin
+  for venue in
+    select x.id from public.venues x
+    where x.subscription_ends_at is null
+      and not exists (select 1 from public.venue_subscription_periods p where p.venue_id = x.id)
+  loop
+    perform public.start_free_trial(venue);
+  end loop;
+end;
+$$;
+
+-- Reminders go out every hour once pg_cron is on: Database -> Extensions ->
+-- turn on pg_cron, then run this file again. Without it, managers still see
+-- how long they have left on their home screen, but aren't reminded.
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule('subscription-notices', '0 * * * *', 'select public.send_subscription_notices()');
+  end if;
+end;
+$$;
 
 
 -- Make the app's API see the new functions now, not in a few minutes.

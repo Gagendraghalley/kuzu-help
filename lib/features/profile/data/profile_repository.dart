@@ -45,6 +45,12 @@ class ProfileRepository {
     await _db.from('profiles').update(changes).eq('id', userId);
   }
 
+  /// Just signed up with Apple: the profile was made without a name, as Apple
+  /// shares it only in the sign-in sheet. Leaves a name that's there alone.
+  Future<void> setMyNameIfEmpty(String fullName) async {
+    await _db.from('profiles').update({'full_name': fullName}).eq('id', _db.auth.currentUser!.id).eq('full_name', '');
+  }
+
   /// A new file name each time (storage_paths.dart), so phones that cached the
   /// old photo show the new one.
   Future<String> _uploadAvatar(String userId, Uint8List photo) async {
@@ -62,7 +68,7 @@ class ProfileRepository {
     await _db.rpc('add_my_role', params: {'new_role': role});
   }
 
-  /// Just signed up with Google: the new account, made a customer, becomes
+  /// Just signed up with Google or Apple: the new account, made a customer, becomes
   /// [role] (UserRole.worker or UserRole.player) as picked on Welcome
   /// (claim_signup_role). Does nothing for an account that isn't new.
   Future<void> claimSignUpRole(String role) async {

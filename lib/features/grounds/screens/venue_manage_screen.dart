@@ -32,12 +32,13 @@ import '../widgets/fact_row.dart';
 import '../widgets/manager_fields.dart';
 import '../widgets/phone_booking_sheet.dart';
 import '../widgets/status_pill.dart';
+import '../widgets/subscription_card.dart';
 import '../widgets/week_timings.dart';
 
 /// Running a venue: its manager's (their home shows [VenueManagePanel]) and
 /// admins'
-/// Purpose: Bookings, grounds and details of one venue, in one place.
-/// Admins also add, change or remove the person who runs it.
+/// Purpose: Bookings, grounds and details of one venue, in one place, with
+/// its subscription. Admins also add, change or remove the person who runs it.
 /// Backend: Reads venues and grounds; pauses bookings (venues.is_active);
 /// set_venue_manager and the create-venue-manager Edge Function (admins).
 /// Done when: The manager can answer bookings, keep grounds up to date and
@@ -100,11 +101,19 @@ class _Manage extends ConsumerWidget {
 
     // Customers see the ground once it has its type, price and some timings.
     final canBeBooked = ground != null && ground.isActive && ground.slots.isNotEmpty;
+    // The subscription goes on top in its last days and once it has ended
+    // (pay to stay listed); otherwise below everything that's used daily.
+    final subscription = venue.subscription;
+    final subscriptionOnTop = subscription != null && (subscription.isEnded() || subscription.endsSoon());
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
       children: [
         _StatusCard(venue: venue, canBeBooked: canBeBooked),
+        if (subscriptionOnTop) ...[
+          const SizedBox(height: 12),
+          SubscriptionCard(venue: venue),
+        ],
         if (ref.watch(isAdminProvider)) ...[
           const SizedBox(height: 12),
           _ManagerCard(venue: venue),
@@ -120,6 +129,10 @@ class _Manage extends ConsumerWidget {
           const SectionHeader(AppStrings.regularBookings),
           const SizedBox(height: 10),
           _RegularBookingsCard(venueId: venue.id, ground: ground),
+        ],
+        if (subscription != null && !subscriptionOnTop) ...[
+          const SizedBox(height: 16),
+          SubscriptionCard(venue: venue),
         ],
         const SizedBox(height: 16),
         Card(
@@ -426,11 +439,13 @@ class _StatusCardState extends ConsumerState<_StatusCard> {
               title: const Text(AppStrings.takingBookings),
               subtitle: Text(!venue.hasManager
                   ? AppStrings.noManagerYet
-                  : !venue.isActive
-                      ? AppStrings.pausedHint
-                      : widget.canBeBooked
-                          ? AppStrings.takingBookingsHint
-                          : AppStrings.notVisibleNoGrounds),
+                  : venue.subscriptionEnded
+                      ? AppStrings.subscriptionEndedHint
+                      : !venue.isActive
+                          ? AppStrings.pausedHint
+                          : widget.canBeBooked
+                              ? AppStrings.takingBookingsHint
+                              : AppStrings.notVisibleNoGrounds),
               value: venue.isActive,
               onChanged: _saving ? null : _setActive,
             ),

@@ -1,5 +1,6 @@
 import 'package:bhutan_services/core/constants/app_constants.dart';
 import 'package:bhutan_services/core/strings/app_strings.dart';
+import 'package:bhutan_services/shared/models/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -100,12 +101,105 @@ void main() {
       expect(customerHome, findsOneWidget);
     });
 
+    testWidgets("logging in with a Google account that has no account says so, and makes none",
+        (tester) async {
+      final auth = (await pumpApp(tester)).auth..socialEmail = 'new@gmail.com';
+      await tapLogIn(tester); // on Welcome: no role picked
+
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+
+      expect(auth.googleSignIns, 1);
+      expect(auth.isLoggedIn, isFalse);
+      expect(find.text(AppStrings.noAccountFound), findsOneWidget);
+      expect(customerHome, findsNothing);
+
+      // Signing up from Welcome instead makes the account, with the role picked.
+      await scrollAndTap(tester, find.text(AppStrings.newHereCreateAccount));
+      await tapAndSettle(tester, AppStrings.needService);
+      await tapAndSettle(tester, AppStrings.continueWithGoogle);
+      expect(auth.isLoggedIn, isTrue);
+      expect(customerHome, findsOneWidget);
+    });
+
     testWidgets('without Google client IDs in config/dev.json there is no button', (tester) async {
       final auth = (await pumpApp(tester)).auth..canUseGoogle = false;
       await tapLogIn(tester); // on Welcome
       expect(find.text(AppStrings.continueWithGoogle), findsNothing);
       expect(find.text(AppStrings.orUseEmail), findsNothing);
       expect(auth.googleSignIns, 0);
+    });
+  });
+
+  group('Continue with Apple (iPhones)', () {
+    testWidgets('a new worker signs up in one tap, named as Apple shares: no code, no password',
+        (tester) async {
+      final fakes = await pumpApp(tester);
+      final auth = fakes.auth
+        ..canUseApple = true
+        ..appleName = 'Karma Wangmo';
+      // As the database makes it from an Apple sign-in: a customer without a name.
+      fakes.profile
+        ..profile = const Profile(id: me, fullName: '', role: UserRole.customer, roles: [UserRole.customer])
+        ..isNewAccount = true;
+
+      await tapAndSettle(tester, AppStrings.offerService);
+      await tapAndSettle(tester, AppStrings.continueWithApple);
+
+      expect(auth.appleSignIns, 1);
+      expect(auth.sentCodes, isEmpty);
+      expect(find.text(AppStrings.createPasswordTitle), findsNothing);
+      expect(fakes.profile.profile.fullName, 'Karma Wangmo');
+      expect(fakes.profile.claimedRoles, [UserRole.worker]);
+      expect(workerSetup, findsOneWidget);
+    });
+
+    testWidgets('logging in: closing the sheet stays put; the name an account has stays', (tester) async {
+      final fakes = await pumpApp(tester); // named 'Test'
+      final auth = fakes.auth
+        ..canUseApple = true
+        ..appleName = 'Someone Else';
+      await tapLogIn(tester); // on Welcome
+
+      auth.applePicksAccount = false;
+      await tapAndSettle(tester, AppStrings.continueWithApple);
+      expect(find.text(AppStrings.logInHint), findsOneWidget);
+      expect(find.text(AppStrings.appleSignInFailed), findsNothing); // closing it is no error
+
+      auth.applePicksAccount = true;
+      await tapAndSettle(tester, AppStrings.continueWithApple);
+      expect(auth.appleSignIns, 2);
+      expect(fakes.profile.profile.fullName, 'Test');
+      expect(customerHome, findsOneWidget);
+    });
+
+    testWidgets('logging in with an Apple ID that has no account says so, and makes none', (tester) async {
+      final fakes = await pumpApp(tester);
+      final auth = fakes.auth
+        ..canUseApple = true
+        ..socialEmail = 'abc123@privaterelay.appleid.com'
+        ..appleName = 'Karma Wangmo';
+      await tapLogIn(tester); // on Welcome: no role picked
+
+      await tapAndSettle(tester, AppStrings.continueWithApple);
+
+      expect(auth.appleSignIns, 1);
+      expect(auth.isLoggedIn, isFalse);
+      expect(find.text(AppStrings.noAccountFound), findsOneWidget);
+      expect(fakes.profile.profile.fullName, 'Test'); // Apple's name went nowhere
+    });
+
+    testWidgets('shows with or without Google; not on Android', (tester) async {
+      final auth = (await pumpApp(tester)).auth
+        ..canUseApple = true
+        ..canUseGoogle = false;
+      await tapLogIn(tester); // on Welcome
+      expect(find.text(AppStrings.continueWithApple), findsOneWidget);
+      expect(find.text(AppStrings.orUseEmail), findsOneWidget);
+
+      auth.canUseApple = false; // as on Android
+      await tapAndSettle(tester, AppStrings.newHereCreateAccount);
+      await tapLogIn(tester);
+      expect(find.text(AppStrings.continueWithApple), findsNothing);
     });
   });
 

@@ -44,7 +44,14 @@ class ManagerHomeScreen extends ConsumerWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, i) => VenueCard(
                     venue: venues[i],
-                    status: VenueStatusPill(venue: venues[i]),
+                    status: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        VenueStatusPill(venue: venues[i]),
+                        if (venues[i].subscription case final subscription?) SubscriptionPill(subscription: subscription),
+                      ],
+                    ),
                     onTap: () => context.push(Routes.venueManageFor(venues[i].id)),
                   ),
                 ),

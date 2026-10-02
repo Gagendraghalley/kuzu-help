@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
@@ -35,6 +36,9 @@ final homeServiceProvider = StateProvider<HomeService>((ref) => HomeService.home
 /// C1 Customer home
 /// Purpose: Help customers find a service quickly: home services (workers),
 /// sports grounds to book, and, soon, party and dining bookings.
+/// Sports grounds only show for accounts that use them too (the player role,
+/// UserRole.addable) and for admins: someone who signed up to find workers
+/// sees home services only.
 /// Backend: Reads service_categories; venue_directory for sports grounds.
 /// Done when: Tapping a category opens the list for the selected dzongkhag,
 /// and Sports grounds lists the venues there.
@@ -43,8 +47,12 @@ class CustomerHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final service = ref.watch(homeServiceProvider);
-    final name = ref.watch(myProfileProvider).valueOrNull?.fullName.trim();
+    final profile = ref.watch(myProfileProvider).valueOrNull;
+    final playsToo = profile?.hasRole(UserRole.player) ?? false; // true for admins
+    final picked = ref.watch(homeServiceProvider);
+    // Kept from another account on this phone, or from before the role was taken away.
+    final service = picked == HomeService.sportsGrounds && !playsToo ? HomeService.homeServices : picked;
+    final name = profile?.fullName.trim();
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -86,8 +94,11 @@ class CustomerHomeScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              const _ServicePicker(),
+              // Only when there's more than one service to choose from.
+              if (playsToo || showPartyDining) ...[
+                const SizedBox(height: 16),
+                _ServicePicker(selected: service, showSports: playsToo),
+              ],
               const SizedBox(height: 16),
               switch (service) {
                 HomeService.homeServices => const _HomeServices(),
@@ -105,14 +116,16 @@ class CustomerHomeScreen extends ConsumerWidget {
   }
 }
 
-/// Big tiles: Home services, Sports grounds, and Party & dining (soon) when
-/// [showPartyDining] is on.
+/// Big tiles: Home services, Sports grounds when [showSports], and Party &
+/// dining (soon) when [showPartyDining] is on.
 class _ServicePicker extends ConsumerWidget {
-  const _ServicePicker();
+  final HomeService selected;
+  final bool showSports;
+
+  const _ServicePicker({required this.selected, required this.showSports});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(homeServiceProvider);
     void select(HomeService service) => ref.read(homeServiceProvider.notifier).state = service;
 
     return IntrinsicHeight(
@@ -127,15 +140,17 @@ class _ServicePicker extends ConsumerWidget {
               onTap: () => select(HomeService.homeServices),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _ServiceTile(
-              icon: Icons.sports_soccer_rounded,
-              label: AppStrings.sportsGrounds,
-              selected: selected == HomeService.sportsGrounds,
-              onTap: () => select(HomeService.sportsGrounds),
+          if (showSports) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ServiceTile(
+                icon: Icons.sports_soccer_rounded,
+                label: AppStrings.sportsGrounds,
+                selected: selected == HomeService.sportsGrounds,
+                onTap: () => select(HomeService.sportsGrounds),
+              ),
             ),
-          ),
+          ],
           if (showPartyDining) ...[
             const SizedBox(width: 10),
             Expanded(
