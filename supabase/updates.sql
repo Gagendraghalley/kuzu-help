@@ -29,6 +29,7 @@
 --      A customer has one booking of a ground at a time, until it's over (book_ground, 13d).
 --  14. Ground subscriptions: a free month for each new ground, then monthly payments that
 --      admins record, one month at a time; a ground whose subscription has ended is hidden.
+--      Admins give free time, and take back free time a ground hasn't had yet.
 -- The last line makes the app see the changes straight away.
 -- =====================================================================
 
@@ -3006,7 +3007,8 @@ create policy "storage: venue photos upload by managers and admins"
 -- that an admin records each month's payment (record_subscription_payment):
 -- one month at a time, never more, and only in the last 7 days of the
 -- current period, so nobody pays far ahead. Admins can also give free time
--- of any length (extend_free_period), and set each ground's monthly fee.
+-- of any length (extend_free_period), take back free time not had yet
+-- (shorten_free_time), and set each ground's monthly fee.
 -- Only admins change subscriptions and billing; a ground's manager reads
 -- them (Settings stays theirs: none of this is in the venues update grant).
 --
@@ -3020,7 +3022,7 @@ create policy "storage: venue photos upload by managers and admins"
 -- and answers them.
 --
 -- The manager is told when a period is added (their free month, free time,
--- a payment), 7, 3 and 1 days before it ends, and when it has ended; admins
+-- a payment) or free time is taken back, 7, 3 and 1 days before it ends, and when it has ended; admins
 -- when it has ended (send_subscription_notices, every hour once pg_cron is
 -- on: end of this section).
 
@@ -3219,6 +3221,75 @@ begin
 end;
 $$;
 
+-- Admins take back free time a ground hasn't had yet, e.g. 6 months given
+-- that should have been 1: it is listed until the end of [last_day] (a
+-- Bhutan date, today or later) instead. Only free time goes (the free trial
+-- and free time admins gave), never a month paid for: Postgres error KH410
+-- if [last_day] is before the last paid month ends. Free periods that would
+-- start after it leave the billing history, and the one it falls in ends
+-- then, with [note] (e.g. why) added to its own. The manager is told.
+create or replace function public.shorten_free_time(venue uuid, last_day date, note text default null)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_end timestamptz;
+  new_end timestamptz;
+  paid_until timestamptz;
+  reason text := left(nullif(trim(note), ''), 300);
+  shortened public.venues;
+begin
+  if not public.is_admin() or not public.is_active_profile((select auth.uid())) then
+    raise exception 'Only admins change subscriptions' using errcode = '42501';
+  end if;
+  -- Waits for (and makes wait) periods being added (add_subscription_period).
+  select v.subscription_ends_at into current_end from public.venues v where v.id = venue for update;
+  if not found then
+    raise exception 'No venue with this ID' using errcode = 'P0002';
+  end if;
+  -- The Bhutan midnight after [last_day], as periods end.
+  new_end := (last_day + 1)::timestamp at time zone 'Asia/Thimphu';
+  if new_end is null or new_end <= now() then
+    raise exception 'The new last day is today or later' using errcode = '22023';
+  end if;
+  if current_end is null or new_end >= current_end then
+    raise exception 'It is listed only until % already', current_end using errcode = '22023';
+  end if;
+  select max(p.ends_at) into paid_until
+  from public.venue_subscription_periods p
+  where p.venue_id = venue and p.kind = 'paid';
+  if paid_until > new_end then
+    raise exception 'Paid until %: months paid for stay', paid_until using errcode = 'KH410';
+  end if;
+
+  -- Periods follow one another from now on, so one ends after new_end, and
+  -- any after it start there: all free, as nothing paid ends after new_end.
+  delete from public.venue_subscription_periods p where p.venue_id = venue and p.starts_at >= new_end;
+  update public.venue_subscription_periods p
+  set ends_at = new_end, note = nullif(left(concat_ws(' · ', p.note, reason), 300), '')
+  where p.venue_id = venue and p.ends_at > new_end;
+
+  update public.venues v
+  set subscription_ends_at = new_end,
+      subscription_kind = (select p.kind from public.venue_subscription_periods p
+                           where p.venue_id = venue order by p.ends_at desc limit 1)
+  where v.id = venue
+  returning * into shortened;
+
+  perform public.add_notification(shortened.manager_id, 'subscription_shortened',
+    jsonb_build_object(
+      'venue_id', shortened.id,
+      'venue_name', shortened.name,
+      'kind', shortened.subscription_kind,
+      'ends_at', new_end,
+      'fee_nu', shortened.subscription_fee_nu,
+      'note', reason),
+    (select auth.uid()));
+end;
+$$;
+
 -- Admins record a ground's payment for its next month: [amount] in Ngultrum,
 -- how it was paid ([method]: a payment_method value) and the journal number
 -- ([reference]). Always exactly one month: Postgres error KH409 while more
@@ -3361,12 +3432,14 @@ revoke execute on function
   from public, anon, authenticated;
 revoke execute on function
   public.extend_free_period(uuid, int, int, text),
+  public.shorten_free_time(uuid, date, text),
   public.record_subscription_payment(uuid, int, text, text, text),
   public.set_subscription_fee(uuid, int),
   public.set_subscription_settings(int, text)
   from public, anon;
 grant execute on function
   public.extend_free_period(uuid, int, int, text),
+  public.shorten_free_time(uuid, date, text),
   public.record_subscription_payment(uuid, int, text, text, text),
   public.set_subscription_fee(uuid, int),
   public.set_subscription_settings(int, text)

@@ -46,9 +46,10 @@ class ErrorMessages {
     }
     // Ground subscriptions (supabase/updates.sql, section 14): the ground's
     // has ended, so its manager can't add bookings; or an admin tried to
-    // record a second month ahead.
+    // record a second month ahead, or to take back a month paid for.
     if (error is PostgrestException && error.code == 'KH402') return AppStrings.subscriptionEndedError;
     if (error is PostgrestException && error.code == 'KH409') return AppStrings.oneMonthAtATime;
+    if (error is PostgrestException && error.code == 'KH410') return AppStrings.paidMonthsStay;
     // The delete-account Edge Function isn't deployed (see the README).
     if (error is FunctionException && error.status == 404) {
       return AppStrings.accountDeletionNotSetUp;

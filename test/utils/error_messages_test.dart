@@ -44,6 +44,8 @@ void main() {
     const ahead = PostgrestException(message: 'Already paid until ...', code: 'KH409');
     expect(ErrorMessages.from(ended), AppStrings.subscriptionEndedError);
     expect(ErrorMessages.from(ahead), AppStrings.oneMonthAtATime);
+    const paid = PostgrestException(message: 'Paid until ...: months paid for stay', code: 'KH410');
+    expect(ErrorMessages.from(paid), AppStrings.paidMonthsStay);
   });
 
   test('the delete-account Edge Function is not deployed', () {

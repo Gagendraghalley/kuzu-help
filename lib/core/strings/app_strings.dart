@@ -953,6 +953,15 @@ class AppStrings {
   /// 'Give 2 months free'.
   static String giveLengthFree(int months, int days) => 'Give ${freeLength(months, days)} free';
   static const freeTimeGiven = 'Free time given. The manager is told.';
+  static const shortenFreeTime = 'Shorten free time';
+  static const shortenFreeTimeHint = "Take back free time this ground hasn't had yet, e.g. 6 months given that "
+      'should have been 1. Months paid for stay.';
+  static const chooseLastDay = 'Choose the new last day';
+  /// 'New last day: Sun 2 Nov'.
+  static String newLastDay(DateTime day) => 'New last day: ${dayLabel(day)}';
+  static const freeTimeShortened = 'Free time shortened. The manager is told.';
+  static const paidMonthsStay =
+      "Months paid for can't be taken back. Choose a day after the last one paid for.";
   static const feeHint = "This ground's fee each month, after any free time. Its manager sees it with their "
       'subscription and reminders.';
   static const feeSaved = 'Monthly fee saved.';
@@ -1088,6 +1097,7 @@ class AppStrings {
           SubscriptionKind.free => 'More free time for ${text('venue_name', 'your ground')}',
           _ => 'Free trial for ${text('venue_name', 'your ground')}',
         },
+      NotificationTypes.subscriptionShortened => 'Less free time for ${text('venue_name', 'your ground')}',
       NotificationTypes.subscriptionEnding =>
         "${text('venue_name', 'Your ground')}'s ${_subscriptionNoun(data['kind'])} ends soon",
       NotificationTypes.subscriptionEnded => '${text('venue_name', 'Your ground')} is hidden from players',
@@ -1170,6 +1180,11 @@ class AppStrings {
           _ => 'Listed for free$until. After that, '
               '${fee == null ? 'a monthly subscription' : feePerMonth(fee)} keeps it listed for players.',
         },
+      NotificationTypes.subscriptionShortened => [
+          'Listed$until. After that, '
+              '${fee == null ? 'a monthly subscription' : feePerMonth(fee)} keeps it listed for players.',
+          if (note.isNotEmpty) note,
+        ].join(' '),
       NotificationTypes.subscriptionEnding => '${lastDay == null ? '' : 'Last day: $lastDay. '}${payNextMonth(fee)}',
       NotificationTypes.subscriptionEnded =>
         'Its ${_subscriptionNoun(data['kind'])} ended${lastDay == null ? '' : ' on $lastDay'}. ${payToListAgain(fee)}',

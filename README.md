@@ -169,7 +169,9 @@ changed.
      payment is always exactly **one month**, and can only be recorded in the last 7 days
      of the current period (or once it has ended), so no ground pays more than a month at
      a time. Admins can also **Give free time** of any length (a week to a year at once,
-     as often as they like) and change each ground's monthly fee. **Billing settings** (the
+     as often as they like), **Shorten free time** the ground hasn't had yet (e.g. 6 months
+     given that should have been 1: pick the new last day, from today; months paid for
+     always stay), and change each ground's monthly fee. **Billing settings** (the
      receipt icon on Sports grounds) holds the fee new grounds get and how managers pay
      Kuzu Help (e.g. an mBoB account), shown to every manager. Only admins can change any
      of it: the database refuses everyone else. Managers see their subscription on their
@@ -178,7 +180,7 @@ changed.
      ground disappears from players' lists, search and its page, nobody can book it, and
      its manager can't add bookings by phone or regular bookings until the next payment
      is recorded; bookings already made stay. Notifications: the manager when the free
-     month starts, free time is given or a payment is recorded (a receipt), 7, 3 and 1
+     month starts, free time is given or shortened, or a payment is recorded (a receipt), 7, 3 and 1
      days before the end, and when it ends; admins when one ends. **The reminders need
      pg_cron**: Database → Extensions → turn on pg_cron, then run `updates.sql` again (it
      schedules them every hour). Deploy `send-push` again for their push wording.
@@ -434,7 +436,7 @@ Once:
 1. Open `ios/Runner.xcworkspace` in Xcode, select *Runner* → *Signing & Capabilities*, and
    check the team is *G2C Office, Royal Government of Bhutan* with no errors. Xcode adds
    Push Notifications and Sign in with Apple to the App ID `bt.gov.kuzuhelp`.
-2. **App Store Connect** (appstoreconnect.apple.com): the app is *kuzu help* (Apple ID
+2. **App Store Connect** (appstoreconnect.apple.com): the app is *Kuzu Help* (Apple ID
    6818068893, SKU `kuzuhelp-ios-001`) with bundle ID `bt.gov.kuzuhelp`. The two must
    match, or Xcode can't find the app and tries to make a new one.
 3. Fill in the listing, much as in the Play Console: description, keywords, support URL,

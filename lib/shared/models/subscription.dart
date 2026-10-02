@@ -34,6 +34,18 @@ class VenueSubscription {
   /// In its last days: the manager is reminded to pay for the next month.
   bool endsSoon({DateTime? now}) => !isEnded(now: now) && canPayNextMonth(now: now);
 
+  /// An admin may take back free time not had yet (shorten_free_time): its
+  /// free trial or free time after today. Months paid for stay.
+  bool canShortenFreeTime({DateTime? now}) =>
+      kind != SubscriptionKind.paid && lastDay.isAfter(BhutanTime.today(now: now));
+
+  /// The earliest last day free time can be shortened to: today, or the last
+  /// day paid for in [periods], whichever is later.
+  static DateTime earliestLastDay(Iterable<SubscriptionPeriod> periods, {DateTime? now}) => periods
+      .where((p) => p.kind == SubscriptionKind.paid)
+      .map((p) => p.lastDay)
+      .fold(BhutanTime.today(now: now), (earliest, paid) => paid.isAfter(earliest) ? paid : earliest);
+
   /// The next period of [months] and [days], as the database adds it: from
   /// where this one ends, or from now once it has ended.
   ({DateTime start, DateTime end}) next({int months = 0, int days = 0, DateTime? now}) {

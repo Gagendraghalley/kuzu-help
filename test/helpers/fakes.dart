@@ -1015,6 +1015,38 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
     _add(venueId, SubscriptionKind.free, months: months, days: days, note: note);
   }
 
+  /// As shorten_free_time: periods after the new end go, the one it falls
+  /// in ends there; never into a month paid for (KH410).
+  @override
+  Future<void> shortenFreeTime(String venueId, {required DateTime lastDay, String? note}) async {
+    _adminOnly();
+    final s = _of(venueId);
+    final end = BhutanTime.at(lastDay.add(const Duration(days: 1)), 0);
+    if (!end.isAfter(DateTime.now()) || !end.isBefore(s.endsAt)) {
+      throw const PostgrestException(message: 'Not a day it can end on', code: '22023');
+    }
+    final mine = periods.where((p) => p.venueId == venueId);
+    if (mine.any((p) => p.kind == SubscriptionKind.paid && p.endsAt.isAfter(end))) {
+      throw const PostgrestException(message: 'Months paid for stay', code: 'KH410');
+    }
+    periods.removeWhere((p) => p.venueId == venueId && !p.startsAt.isBefore(end));
+    final i = periods.indexWhere((p) => p.venueId == venueId && p.endsAt.isAfter(end));
+    if (i >= 0) {
+      final p = periods[i];
+      periods[i] = SubscriptionPeriod(
+        id: p.id,
+        venueId: p.venueId,
+        kind: p.kind,
+        startsAt: p.startsAt,
+        endsAt: end,
+        note: p.note == null ? note : (note == null ? p.note : '${p.note} · $note'),
+        createdAt: p.createdAt,
+      );
+    }
+    final latest = periods.where((p) => p.venueId == venueId).firstOrNull;
+    venues.setSubscription(venueId, VenueSubscription(endsAt: end, kind: latest?.kind ?? s.kind, feeNu: s.feeNu));
+  }
+
   @override
   Future<void> setFee(String venueId, int? feeNu) async {
     _adminOnly();

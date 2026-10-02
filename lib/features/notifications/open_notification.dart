@@ -73,6 +73,7 @@ void openNotification(BuildContext context, WidgetRef ref, AppNotification n) {
     // Subscriptions: the ground's Subscription page, with its billing
     // details (the manager), or the way to record a payment (admins).
     case NotificationTypes.subscriptionUpdated ||
+          NotificationTypes.subscriptionShortened ||
           NotificationTypes.subscriptionEnding ||
           NotificationTypes.subscriptionEnded ||
           NotificationTypes.subscriptionLapsed

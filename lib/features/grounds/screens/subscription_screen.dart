@@ -29,10 +29,10 @@ import '../widgets/status_pill.dart';
 /// A ground's subscription: its manager's (to read) and admins'
 /// Purpose: How long players can find and book the ground, its monthly fee,
 /// how to pay, and its billing history. Admins record each month's payment
-/// (one month at a time), give free time and set the fee.
+/// (one month at a time), give or take back free time and set the fee.
 /// Backend: The venues row (venueDetailsProvider), venue_subscription_periods
 /// and subscription_settings; record_subscription_payment,
-/// extend_free_period and set_subscription_fee (admins only).
+/// extend_free_period, shorten_free_time and set_subscription_fee (admins only).
 /// Done when: The manager knows when to pay and how; an admin records a
 /// payment in a few taps.
 class SubscriptionScreen extends ConsumerWidget {
@@ -151,7 +151,7 @@ class _StatusCard extends StatelessWidget {
 }
 
 /// Admins only: record the next month's payment (from the last 7 days, one
-/// month at a time), give free time, change the fee.
+/// month at a time), give or take back free time, change the fee.
 class _AdminCard extends StatelessWidget {
   final Venue venue;
   final VenueSubscription subscription;
@@ -197,6 +197,14 @@ class _AdminCard extends StatelessWidget {
               label: const Text(AppStrings.giveFreeTime),
               onPressed: () => _open(context, _FreeTimeSheet(venueId: venue.id, subscription: s)),
             ),
+            if (s.canShortenFreeTime()) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                icon: const Icon(Icons.event_busy_outlined),
+                label: const Text(AppStrings.shortenFreeTime),
+                onPressed: () => _open(context, _ShortenFreeTimeSheet(venueId: venue.id, subscription: s)),
+              ),
+            ],
             const SizedBox(height: 4),
             TextButton.icon(
               icon: const Icon(Icons.edit_outlined),
@@ -530,6 +538,122 @@ class _FreeTimeSheetState extends ConsumerState<_FreeTimeSheet> {
             ],
             const SizedBox(height: 16),
             PrimaryButton(label: AppStrings.giveLengthFree(months, days), isLoading: _saving, onPressed: _save),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Admins: take back free time the ground hasn't had yet, down to a new last
+/// day: from today, and never into a month paid for.
+class _ShortenFreeTimeSheet extends ConsumerStatefulWidget {
+  final String venueId;
+  final VenueSubscription subscription;
+
+  const _ShortenFreeTimeSheet({required this.venueId, required this.subscription});
+
+  @override
+  ConsumerState<_ShortenFreeTimeSheet> createState() => _ShortenFreeTimeSheetState();
+}
+
+class _ShortenFreeTimeSheetState extends ConsumerState<_ShortenFreeTimeSheet> {
+  final _note = TextEditingController();
+  DateTime? _lastDay; // a Bhutan day; none until the admin picks one
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDay(DateTime earliest) async {
+    DateTime local(DateTime day) => DateTime(day.year, day.month, day.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: local(_lastDay ?? earliest),
+      firstDate: local(earliest),
+      lastDate: local(widget.subscription.lastDay.subtract(const Duration(days: 1))),
+    );
+    if (picked == null) return;
+    setState(() => _lastDay = DateTime.utc(picked.year, picked.month, picked.day));
+  }
+
+  Future<void> _save() async {
+    final lastDay = _lastDay;
+    if (_saving || lastDay == null) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref
+          .read(subscriptionRepositoryProvider)
+          .shortenFreeTime(widget.venueId, lastDay: lastDay, note: _note.text.orNull);
+      _refreshSubscription(ref, widget.venueId);
+      navigator.pop();
+      messenger.showSnackBar(const SnackBar(content: Text(AppStrings.freeTimeShortened)));
+    } catch (e) {
+      if (mounted) setState(() => _error = ErrorMessages.from(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lastDay = _lastDay;
+    // From the last day paid for, once the billing history is in (the
+    // database refuses earlier days anyway).
+    final periods = ref.watch(subscriptionPeriodsProvider(widget.venueId));
+    final earliest = periods.hasValue || periods.hasError
+        ? VenueSubscription.earliestLastDay(periods.valueOrNull ?? const [])
+        : null;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(24, 0, 24, 16 + MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SheetTitle(AppStrings.shortenFreeTime),
+            const SizedBox(height: 8),
+            const InfoNote(icon: Icons.event_busy_outlined, text: AppStrings.shortenFreeTimeHint),
+            const SizedBox(height: 12),
+            Text(AppStrings.freeUntil(widget.subscription.lastDay),
+                style: const TextStyle(color: AppColors.inkSoft, height: 1.4)),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(lastDay == null ? AppStrings.chooseLastDay : AppStrings.newLastDay(lastDay)),
+              onPressed: earliest == null ? null : () => _pickDay(earliest),
+            ),
+            if (lastDay != null) ...[
+              const SizedBox(height: 12),
+              Text(AppStrings.listedUntil(lastDay),
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primaryDeep)),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: _note,
+              maxLength: 300,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: AppStrings.billingNote),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              FormError(_error!),
+            ],
+            const SizedBox(height: 16),
+            PrimaryButton(
+              label: AppStrings.shortenFreeTime,
+              isLoading: _saving,
+              onPressed: lastDay == null ? null : _save,
+            ),
           ],
         ),
       ),

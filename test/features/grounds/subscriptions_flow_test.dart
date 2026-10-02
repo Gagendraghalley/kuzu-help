@@ -1,5 +1,6 @@
 import 'package:bhutan_services/core/constants/app_constants.dart';
 import 'package:bhutan_services/core/strings/app_strings.dart';
+import 'package:bhutan_services/core/utils/bhutan_time.dart';
 import 'package:bhutan_services/core/utils/price_utils.dart';
 import 'package:bhutan_services/shared/models/subscription.dart';
 import 'package:bhutan_services/shared/widgets/primary_button.dart';
@@ -107,7 +108,12 @@ void main() {
           const Offset(0, -250));
       expect(find.text(AppStrings.billingHistory), findsOneWidget);
       // Only admins change subscriptions.
-      for (final adminOnly in [AppStrings.recordPayment, AppStrings.giveFreeTime, AppStrings.changeFee]) {
+      for (final adminOnly in [
+        AppStrings.recordPayment,
+        AppStrings.giveFreeTime,
+        AppStrings.shortenFreeTime,
+        AppStrings.changeFee,
+      ]) {
         expect(find.text(adminOnly), findsNothing, reason: adminOnly);
       }
     });
@@ -234,6 +240,87 @@ void main() {
           findsOneWidget);
     });
 
+    testWidgets('an admin takes back free time not had yet: 6 months given ends today instead', (tester) async {
+      final s = subscriptionFor(daysLeft: 180, kind: SubscriptionKind.free);
+      final given = SubscriptionPeriod(
+        id: 'period-free',
+        venueId: 'venue-1',
+        kind: SubscriptionKind.free,
+        startsAt: DateTime.now().subtract(const Duration(days: 2)),
+        endsAt: s.endsAt,
+        note: 'Opening offer',
+        createdAt: DateTime.now().subtract(const Duration(days: 2)),
+      );
+      final fakes =
+          await openGrounds(tester, role: UserRole.admin, manager: 'tashi', subscription: s, periods: [given]);
+      await openChangliSubscription(tester);
+
+      await tapAndSettle(tester, AppStrings.shortenFreeTime);
+      expect(find.text(AppStrings.freeUntil(s.lastDay)), findsOneWidget);
+      // Nothing happens until a day is chosen.
+      expect(tester.widget<PrimaryButton>(find.widgetWithText(PrimaryButton, AppStrings.shortenFreeTime)).onPressed,
+          isNull);
+
+      await tapAndSettle(tester, AppStrings.chooseLastDay);
+      await tapAndSettle(tester, 'OK'); // the earliest it can be: today
+      final today = BhutanTime.today();
+      expect(find.text(AppStrings.newLastDay(today)), findsOneWidget);
+      expect(find.text(AppStrings.listedUntil(today)), findsOneWidget);
+      await tester.enterText(find.widgetWithText(TextField, AppStrings.billingNote), 'Agreed on one month');
+      await tapButton(tester, AppStrings.shortenFreeTime);
+
+      final end = BhutanTime.at(today.add(const Duration(days: 1)), 0);
+      final shortened = fakes.subscriptions.periods.single;
+      expect((shortened.kind, shortened.startsAt, shortened.endsAt, shortened.note),
+          (SubscriptionKind.free, given.startsAt, end, 'Opening offer · Agreed on one month'));
+      expect(find.text(AppStrings.freeTimeShortened), findsOneWidget);
+      expect(find.text(AppStrings.listedUntil(today)), findsOneWidget);
+      // Its last day: nothing after today is left to take back.
+      expect(find.text(AppStrings.shortenFreeTime), findsNothing);
+    });
+
+    testWidgets('free time after a month paid for can all go, but the paid month stays', (tester) async {
+      final s = subscriptionFor(daysLeft: 40, kind: SubscriptionKind.free);
+      final paidEnd = BhutanTime.at(BhutanTime.today().add(const Duration(days: 11)), 0); // last day in 10 days
+      final paid = SubscriptionPeriod(
+        id: 'period-paid',
+        venueId: 'venue-1',
+        kind: SubscriptionKind.paid,
+        startsAt: paidEnd.subtract(const Duration(days: 30)),
+        endsAt: paidEnd,
+        amountNu: 1500,
+        paymentMethod: BillingMethod.mbob,
+        createdAt: DateTime.now().subtract(const Duration(days: 20)),
+      );
+      final free = SubscriptionPeriod(
+        id: 'period-free',
+        venueId: 'venue-1',
+        kind: SubscriptionKind.free,
+        startsAt: paidEnd,
+        endsAt: s.endsAt,
+        createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      );
+      final fakes = await openGrounds(tester,
+          role: UserRole.admin, manager: 'tashi', subscription: s, periods: [free, paid]);
+      await openChangliSubscription(tester);
+
+      await tapAndSettle(tester, AppStrings.shortenFreeTime);
+      await tapAndSettle(tester, AppStrings.chooseLastDay);
+      await tapAndSettle(tester, 'OK'); // the earliest it can be: the last day paid for
+      final paidLastDay = VenueSubscription.lastDayBefore(paidEnd);
+      expect(find.text(AppStrings.newLastDay(paidLastDay)), findsOneWidget);
+      await tapButton(tester, AppStrings.shortenFreeTime);
+
+      expect(fakes.subscriptions.periods.map((p) => p.id), ['period-paid']);
+      expect(find.text(AppStrings.subscriptionUntil(SubscriptionKind.paid, paidLastDay)), findsOneWidget);
+      expect(find.text(AppStrings.shortenFreeTime), findsNothing);
+      // And the database keeps paid months anyway.
+      await expectLater(
+        fakes.subscriptions.shortenFreeTime('venue-1', lastDay: BhutanTime.today()),
+        throwsA(isA<Object>().having((e) => e.toString(), 'error', contains('KH410'))),
+      );
+    });
+
     testWidgets("an admin changes a ground's monthly fee", (tester) async {
       final fakes = await openGrounds(tester, role: UserRole.admin, manager: 'tashi');
       await openChangliSubscription(tester);
@@ -298,6 +385,10 @@ void main() {
       expect(title(NotificationTypes.subscriptionUpdated, paid), 'Payment received for Changli Futsal');
       expect(body(NotificationTypes.subscriptionUpdated, paid), 'Nu. 1,500 · Paid until Mon 2 Nov.');
       expect(title(NotificationTypes.subscriptionUpdated, {...trial, 'kind': 'free'}), 'More free time for Changli Futsal');
+      final shortened = {...trial, 'kind': 'free', 'note': 'Agreed on one month'};
+      expect(title(NotificationTypes.subscriptionShortened, shortened), 'Less free time for Changli Futsal');
+      expect(body(NotificationTypes.subscriptionShortened, shortened),
+          'Listed until Mon 2 Nov. After that, Nu. 1,500 a month keeps it listed for players. Agreed on one month');
 
       expect(title(NotificationTypes.subscriptionEnding, {...trial, 'kind': 'paid'}),
           "Changli Futsal's subscription ends soon");

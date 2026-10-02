@@ -173,6 +173,7 @@ class NotificationTypes {
   static const venueReviewUpdated = 'venue_review_updated';  // the manager
   // Ground subscriptions (supabase/updates.sql, section 14)
   static const subscriptionUpdated = 'subscription_updated'; // the manager: a free month, free time or a payment
+  static const subscriptionShortened = 'subscription_shortened'; // the manager: an admin took back free time
   static const subscriptionEnding = 'subscription_ending';   // the manager: 7, 3 and 1 days before it ends
   static const subscriptionEnded = 'subscription_ended';     // the manager: their ground is hidden
   static const subscriptionLapsed = 'subscription_lapsed';   // admins: a ground's subscription ended

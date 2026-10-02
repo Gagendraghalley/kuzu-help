@@ -60,6 +60,37 @@ void main() {
       final late = s.next(months: 1, now: bt(2026, 11, 5, 10));
       expect((late.start, late.end), (bt(2026, 11, 5, 10), bt(2026, 12, 6))); // the time in between isn't charged
     });
+
+    test('free time not had yet can be taken back, but not on its last day, once ended, or when paid', () {
+      expect(s.canShortenFreeTime(now: bt(2026, 10, 2, 15)), isTrue);
+      expect(s.canShortenFreeTime(now: bt(2026, 11, 2, 10)), isFalse); // nothing after today to take back
+      expect(s.canShortenFreeTime(now: bt(2026, 11, 5)), isFalse);
+      final paid = VenueSubscription(endsAt: s.endsAt, kind: SubscriptionKind.paid);
+      expect(paid.canShortenFreeTime(now: bt(2026, 10, 2)), isFalse);
+    });
+  });
+
+  group('free time can be shortened down to', () {
+    SubscriptionPeriod paidUntil(DateTime end) => SubscriptionPeriod(
+          id: 'p1',
+          venueId: 'v1',
+          kind: SubscriptionKind.paid,
+          startsAt: end.subtract(const Duration(days: 30)),
+          endsAt: end,
+          amountNu: 1500,
+          paymentMethod: BillingMethod.cash,
+          createdAt: end.subtract(const Duration(days: 30)),
+        );
+    final now = bt(2026, 10, 2, 15);
+
+    test('today, with nothing paid ahead', () {
+      expect(VenueSubscription.earliestLastDay([], now: now), DateTime.utc(2026, 10, 2));
+      expect(VenueSubscription.earliestLastDay([paidUntil(bt(2026, 9, 10))], now: now), DateTime.utc(2026, 10, 2));
+    });
+
+    test('the last day paid for: months paid for stay', () {
+      expect(VenueSubscription.earliestLastDay([paidUntil(bt(2026, 10, 10))], now: now), DateTime.utc(2026, 10, 9));
+    });
   });
 
   group('Venue.subscription', () {

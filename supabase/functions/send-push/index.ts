@@ -245,6 +245,7 @@ export function pushTitle(type: string, data: Data): string {
         : data.kind === "free"
         ? `More free time for ${text(data, "venue_name", "your ground")}`
         : `Free trial for ${text(data, "venue_name", "your ground")}`;
+    case "subscription_shortened": return `Less free time for ${text(data, "venue_name", "your ground")}`;
     case "subscription_ending": return `${text(data, "venue_name", "Your ground")}'s ${subscriptionNoun(data.kind)} ends soon`;
     case "subscription_ended": return `${text(data, "venue_name", "Your ground")} is hidden from players`;
     case "subscription_lapsed": return `${text(data, "venue_name", "A ground")}'s subscription ended`;
@@ -309,6 +310,11 @@ export function pushBody(type: string, data: Data): string {
         ? `Listed for free${until}.`
         : `Listed for free${until}. After that, ${fee === undefined ? "a monthly subscription" : `${nu(fee)} a month`} keeps it listed for players.`;
     }
+    case "subscription_shortened":
+      return [
+        `Listed${until}. After that, ${fee === undefined ? "a monthly subscription" : `${nu(fee)} a month`} keeps it listed for players.`,
+        note,
+      ].filter((s) => s !== "").join(" ");
     case "subscription_ending": return `${lastDay === undefined ? "" : `Last day: ${lastDay}. `}${payNextMonth(fee)}`;
     case "subscription_ended":
       return `Its ${subscriptionNoun(data.kind)} ended${lastDay === undefined ? "" : ` on ${lastDay}`}. ${payToListAgain(fee)}`;

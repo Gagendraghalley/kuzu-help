@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
+import '../../../core/utils/bhutan_time.dart';
 import '../../../shared/models/subscription.dart';
 
 /// Talks to Supabase about grounds' subscriptions (supabase/updates.sql,
@@ -56,6 +57,17 @@ class SubscriptionRepository {
       'venue': venueId,
       'add_months': months,
       'add_days': days,
+      'note': note,
+    });
+  }
+
+  /// Takes back free time not had yet: listed until the end of [lastDay] (a
+  /// Bhutan day) instead. Postgres error KH410 if that's before the last
+  /// paid month ends.
+  Future<void> shortenFreeTime(String venueId, {required DateTime lastDay, String? note}) async {
+    await _db.rpc('shorten_free_time', params: {
+      'venue': venueId,
+      'last_day': BhutanTime.isoDate(lastDay),
       'note': note,
     });
   }
